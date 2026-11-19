@@ -1,0 +1,147 @@
+{
+  "name": "pds-schema-v2",
+  "title": "Plan-Do-See 다이어리 데이터 계약 v2",
+  "description": "서버 데이터베이스(Postgres)의 테이블·컬럼·관계와 날짜·시간·단위 규칙. 이 파일은 실제 DB와 scripts/test-contract.mjs 로 매번 대조한다. 원본 SQL 은 db/schema.sql.",
+  "conventions": {
+    "date": {
+      "columns": "계획 기간(start_date·end_date)과 할 일 마감일(due_date)",
+      "db_type": "date (시간대 없음)",
+      "format": "YYYY-MM-DD",
+      "rule": "날짜는 시간대 변환 없이 문자열 그대로 저장·전달·표시한다. 브라우저 시간대 때문에 하루 밀리는 일을 막기 위함."
+    },
+    "timestamp": {
+      "columns": "created_at, updated_at, started_at, ended_at, completed_at, canceled_at, deleted_at, valid_from, replaced_at",
+      "db_type": "timestamptz",
+      "storage": "UTC",
+      "display": "Asia/Seoul (한국 시간)",
+      "input": "시간대가 포함된 ISO 8601 (예: 2026-11-19T14:30:00+09:00). 시간대 없는 값은 서버가 거절한다.",
+      "export": "UTC ISO 8601 (끝이 Z)"
+    },
+    "today": "지연 판정의 '오늘'은 서버가 Asia/Seoul 기준으로 계산한 날짜",
+    "duration_unit": "모든 시간 길이는 분(minute) 단위 정수. 컬럼 이름이 *_minutes 이면 분이다. 저장·집계·표시 모두 같은 단위.",
+    "priority": { "1": "높음", "2": "중간", "3": "낮음" },
+    "ids": "모든 id 는 bigint 자동 증가. 계획 id 는 수정해도 바뀌지 않는다.",
+    "text_encoding": "UTF-8. 화면은 모든 사용자 입력을 텍스트로만 출력한다(HTML 로 해석하지 않음)."
+  },
+  "tables": {
+    "plans": {
+      "description": "계획(Plan). 현재 값만 들어 있고, 수정 전 값은 plan_revisions 에 쌓인다.",
+      "columns": {
+        "id": { "type": "bigint", "nullable": false, "default": "자동 증가" },
+        "title": { "type": "text", "nullable": false, "check": "1~200자" },
+        "start_date": { "type": "date", "nullable": false, "format": "YYYY-MM-DD" },
+        "end_date": { "type": "date", "nullable": false, "format": "YYYY-MM-DD", "check": "start_date 보다 빠를 수 없음" },
+        "priority": { "type": "smallint", "nullable": false, "check": "1~3" },
+        "success_criteria": { "type": "text", "nullable": false, "check": "1~1000자" },
+        "estimated_minutes": { "type": "integer", "nullable": false, "unit": "minutes", "check": "0~100000" },
+        "version": { "type": "integer", "nullable": false, "default": "1", "description": "수정될 때마다 1 증가. 1 이 최초 계획." },
+        "created_at": { "type": "timestamptz", "nullable": false, "default": "now()" },
+        "updated_at": { "type": "timestamptz", "nullable": false, "default": "now()" },
+        "source_retro_note_id": { "type": "bigint", "nullable": true, "description": "이 계획이 어느 회고 개선점에서 만들어졌는지(다음 계획 반영)" }
+      },
+      "primary_key": ["id"],
+      "unique": [{ "columns": ["source_retro_note_id"], "where": "source_retro_note_id is not null", "description": "개선점 한 건은 다음 계획 하나에만 반영" }],
+      "foreign_keys": [{ "column": "source_retro_note_id", "references": "retro_notes.id", "on_delete": "NO ACTION" }]
+    },
+    "plan_revisions": {
+      "description": "계획 수정 이력. 계획이 수정될 때 DB 트리거가 '수정 전 값'을 그대로 쌓는다. 추가만 가능(수정 불가).",
+      "columns": {
+        "id": { "type": "bigint", "nullable": false, "default": "자동 증가" },
+        "plan_id": { "type": "bigint", "nullable": false },
+        "version": { "type": "integer", "nullable": false, "description": "이 이력이 보존하는 버전. 1 = 최초 계획" },
+        "title": { "type": "text", "nullable": false },
+        "start_date": { "type": "date", "nullable": false, "format": "YYYY-MM-DD" },
+        "end_date": { "type": "date", "nullable": false, "format": "YYYY-MM-DD" },
+        "priority": { "type": "smallint", "nullable": false },
+        "success_criteria": { "type": "text", "nullable": false },
+        "estimated_minutes": { "type": "integer", "nullable": false, "unit": "minutes" },
+        "valid_from": { "type": "timestamptz", "nullable": false, "description": "이 버전이 만들어진 시각" },
+        "replaced_at": { "type": "timestamptz", "nullable": false, "default": "now()", "description": "이 버전이 수정되어 대체된 시각" }
+      },
+      "primary_key": ["id"],
+      "unique": [{ "columns": ["plan_id", "version"] }],
+      "foreign_keys": [{ "column": "plan_id", "references": "plans.id", "on_delete": "CASCADE" }]
+    },
+    "tasks": {
+      "description": "할 일. 계획에 속한다. 삭제는 행을 지우지 않고 deleted_at 만 채운다(회고 근거 추적).",
+      "columns": {
+        "id": { "type": "bigint", "nullable": false, "default": "자동 증가" },
+        "plan_id": { "type": "bigint", "nullable": false },
+        "title": { "type": "text", "nullable": false, "check": "1~200자" },
+        "due_date": { "type": "date", "nullable": true, "format": "YYYY-MM-DD" },
+        "priority": { "type": "smallint", "nullable": false, "default": "2", "check": "1~3" },
+        "tags": { "type": "text[]", "nullable": false, "default": "{}", "description": "최대 10개, 각 20자 이하, 중복 없음" },
+        "estimated_minutes": { "type": "integer", "nullable": false, "default": "0", "unit": "minutes", "check": "0~100000" },
+        "status": { "type": "text", "nullable": false, "default": "todo", "enum": ["todo", "done"] },
+        "deleted_at": { "type": "timestamptz", "nullable": true },
+        "created_at": { "type": "timestamptz", "nullable": false, "default": "now()" },
+        "updated_at": { "type": "timestamptz", "nullable": false, "default": "now()" }
+      },
+      "primary_key": ["id"],
+      "foreign_keys": [{ "column": "plan_id", "references": "plans.id", "on_delete": "RESTRICT" }]
+    },
+    "executions": {
+      "description": "실행 기록(Do). 계획·할 일과 별도 테이블이라 기록을 저장해도 원래 계획 값이 덮어써지지 않는다.",
+      "columns": {
+        "id": { "type": "bigint", "nullable": false, "default": "자동 증가" },
+        "task_id": { "type": "bigint", "nullable": false },
+        "started_at": { "type": "timestamptz", "nullable": false },
+        "ended_at": { "type": "timestamptz", "nullable": false, "check": "started_at 보다 빠를 수 없음" },
+        "actual_minutes": { "type": "integer", "nullable": false, "unit": "minutes", "check": "0~100000", "description": "실제 소요 시간. 안 적으면 종료-시작으로 계산" },
+        "blocker": { "type": "text", "nullable": true, "check": "1000자 이하", "description": "막힘 사유" },
+        "created_at": { "type": "timestamptz", "nullable": false, "default": "now()" }
+      },
+      "primary_key": ["id"],
+      "foreign_keys": [{ "column": "task_id", "references": "tasks.id", "on_delete": "RESTRICT" }]
+    },
+    "completions": {
+      "description": "완료 기록. 같은 요청이 두 번 와도 유효한 완료는 할 일당 1건. 완료 취소는 canceled_at 만 채운다.",
+      "columns": {
+        "id": { "type": "bigint", "nullable": false, "default": "자동 증가" },
+        "task_id": { "type": "bigint", "nullable": false },
+        "idempotency_key": { "type": "uuid", "nullable": false, "description": "멱등성 키(같은 요청 식별)" },
+        "completed_at": { "type": "timestamptz", "nullable": false, "default": "now()" },
+        "canceled_at": { "type": "timestamptz", "nullable": true }
+      },
+      "primary_key": ["id"],
+      "unique": [
+        { "columns": ["idempotency_key"] },
+        { "columns": ["task_id"], "where": "canceled_at is null", "description": "할 일당 취소되지 않은 완료는 1건" }
+      ],
+      "foreign_keys": [{ "column": "task_id", "references": "tasks.id", "on_delete": "RESTRICT" }]
+    },
+    "retro_notes": {
+      "description": "회고(See)에서 정한 개선점 한 줄.",
+      "columns": {
+        "id": { "type": "bigint", "nullable": false, "default": "자동 증가" },
+        "plan_id": { "type": "bigint", "nullable": false, "description": "어느 계획의 회고인지" },
+        "improvement": { "type": "text", "nullable": false, "check": "1~500자" },
+        "created_at": { "type": "timestamptz", "nullable": false, "default": "now()" }
+      },
+      "primary_key": ["id"],
+      "foreign_keys": [{ "column": "plan_id", "references": "plans.id", "on_delete": "RESTRICT" }]
+    }
+  },
+  "relations": [
+    "plans 1 ── N plan_revisions (수정 이력)",
+    "plans 1 ── N tasks (계획에 속한 할 일)",
+    "tasks 1 ── N executions (할 일의 실행 기록)",
+    "tasks 1 ── N completions (할 일의 완료 기록, 유효한 것은 최대 1)",
+    "plans 1 ── N retro_notes (계획의 회고 개선점)",
+    "retro_notes 1 ── 0..1 plans (개선점 → 다음 계획, plans.source_retro_note_id)"
+  ],
+  "retro_definitions": {
+    "plan_count": "대상 계획에 속한, 삭제되지 않은(deleted_at is null) 할 일 수",
+    "done_count": "그중 status = 'done' 인 할 일 수",
+    "late_count": "status = 'todo' 이면서 due_date 가 서울 시간 기준 오늘보다 앞선 할 일 수 (완료한 할 일은 지연으로 세지 않음)",
+    "blocked_count": "실행 기록에 막힘 사유(blocker)가 하나 이상 적힌 할 일 수",
+    "estimated_minutes": "대상 할 일의 estimated_minutes 합계",
+    "actual_minutes": "대상 할 일의 실행 기록 actual_minutes 합계",
+    "diff_minutes": "actual_minutes − estimated_minutes (대상이 없으면 0)"
+  },
+  "export": {
+    "endpoint": "GET /api/export",
+    "format": "JSON 파일 하나 (pds-diary-export-YYYY-MM-DD.json)",
+    "contains": "위 6개 테이블의 모든 행(삭제 표시된 할 일·취소된 완료 포함), schema 이름, 내보낸 시각, 시간대·단위 규칙"
+  }
+}
