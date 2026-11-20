@@ -77,7 +77,7 @@ export default function TasksView() {
       </details>
 
       <section className="card">
-        <div className="grid">
+        <div className="grid filters">
           <label>검색 (제목·태그)
             <input value={q} placeholder="예: 단어" onChange={(e) => setQ(e.target.value)} />
           </label>

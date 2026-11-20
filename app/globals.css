@@ -224,3 +224,40 @@ label button.ghost { align-self: flex-start; padding: 6px 12px; font-size: 13px;
 
 /* 내보내기 링크: 메뉴 오른쪽 끝 */
 .topbar nav .export-link { margin-left: 8px; background: var(--accent-soft); color: var(--accent); }
+
+/* ── 모바일: 상단 메뉴는 로고 아래 한 줄로, 넘치면 옆으로 밀어서 ── */
+@media (max-width: 640px) {
+  .topbar { flex-wrap: wrap; gap: 2px 12px; padding: 10px 16px 6px; }
+  .topbar .brand { white-space: nowrap; }
+  .topbar nav { width: 100%; overflow-x: auto; flex-wrap: nowrap; gap: 4px; padding-bottom: 4px; scrollbar-width: none; }
+  .topbar nav::-webkit-scrollbar { display: none; }
+  .topbar nav a { white-space: nowrap; flex-shrink: 0; padding: 6px 12px; }
+  .topbar nav .export-link { margin-left: 0; }
+  .container { padding-top: 8px; }
+}
+
+/* 모바일: 칸이 좁아 마감 개수 원이 날짜 숫자를 가리므로 작은 점으로 (개수는 날짜를 누르면 아래 패널에 표시) */
+@media (max-width: 640px) {
+  .due-pill { top: 7px; right: 4px; min-width: 9px; width: 9px; height: 9px; padding: 0; font-size: 0; line-height: 0; }
+  .due-pill.all-done { background: var(--ok); }
+}
+
+/* 모바일: 필터는 2열(검색만 전체 폭), 할 일 카드의 버튼은 제목 아래 줄로 */
+@media (max-width: 640px) {
+  .filters { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .filters > label:first-child { grid-column: 1 / -1; }
+  .task { flex-wrap: wrap; }
+  .task-actions { width: 100%; padding-left: 42px; }
+}
+
+/* 모바일: 회고 숫자 카드는 2열 */
+@media (max-width: 640px) {
+  .metric-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .metric { padding: 14px; }
+  .metric-value { font-size: 20px; }
+}
+
+/* 모바일: 표의 항목 이름(th)이 글자 중간에서 꺾이지 않게 */
+@media (max-width: 640px) {
+  th { white-space: nowrap; padding-right: 14px; }
+}
