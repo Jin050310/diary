@@ -45,7 +45,22 @@ export default function Calendar({
     due.set(t.due_date, c);
   }
 
+  // 이번 달에 걸쳐 있는 계획만 범례에 표시
+  const monthStart = toIso(Date.UTC(year, month, 1));
+  const monthEnd = toIso(Date.UTC(year, month + 1, 0));
+  const legend = sorted.filter((p) => p.start_date <= monthEnd && p.end_date >= monthStart);
+
   return (
+    <>
+    {legend.length > 0 && (
+      <div className="cal-legend" aria-label="계획 색상 범례">
+        {legend.map((p) => (
+          <Link key={p.id} href={`/plans/${p.id}`} className={`legend-chip c${p.id % 6}`} title={`${p.start_date} ~ ${p.end_date}`}>
+            {p.title}
+          </Link>
+        ))}
+      </div>
+    )}
     <div className="cal" role="grid" aria-label={monthLabel(year, month)}>
       <div className="cal-head" role="row">
         {WEEKDAYS.map((d, i) => (
@@ -71,7 +86,7 @@ export default function Calendar({
             key={days[0]}
             className="cal-week"
             role="row"
-            style={{ gridTemplateRows: `30px repeat(${Math.max(bars.length, 1)}, 22px)` }}
+            style={{ gridTemplateRows: `30px repeat(${Math.max(bars.length, 1)}, 12px)` }}
           >
             {days.map((d, i) => {
               const inMonth = Number(d.slice(5, 7)) - 1 === month;
@@ -119,5 +134,6 @@ export default function Calendar({
         );
       })}
     </div>
+    </>
   );
 }

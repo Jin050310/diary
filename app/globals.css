@@ -135,12 +135,21 @@ tr:last-child td { border-bottom: 0; }
 .cal-day.sat .num, .cal-head .sat { color: var(--accent); }
 .cal-day.today .num { background: var(--accent); color: var(--on-accent); }
 .cal-day.selected { background: var(--accent-soft); }
+/* 계획 기간은 얇은 색 줄로 표시하고(주가 길어지지 않게), 색 ↔ 계획 이름은 달력 위 범례로 확인 */
 .cal-bar {
-  z-index: 1; margin: 0 4px; padding: 0 10px; font-size: 12px; font-weight: 700; line-height: 22px; height: 22px;
-  border-radius: 999px; text-decoration: none; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-  color: #1b2430; align-self: center; transition: filter .12s;
+  z-index: 1; margin: 0 4px; height: 6px; font-size: 0; border-radius: 999px; text-decoration: none;
+  align-self: center; transition: height .12s, filter .12s;
 }
-.cal-bar:hover { filter: brightness(0.95); }
+.cal-bar:hover { height: 9px; filter: brightness(0.92); }
+.cal-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.legend-chip {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+  background: var(--bg); color: var(--text); font-size: 13px; font-weight: 600; text-decoration: none;
+}
+.legend-chip:hover { background: var(--accent-soft); }
+.legend-chip::before { content: ""; width: 10px; height: 10px; border-radius: 999px; background: var(--dot, #bcdcff); }
+.legend-chip.c0 { --dot: #bcdcff; } .legend-chip.c1 { --dot: #ffd9b8; } .legend-chip.c2 { --dot: #bdecd2; }
+.legend-chip.c3 { --dot: #e1d3fb; } .legend-chip.c4 { --dot: #ffd0da; } .legend-chip.c5 { --dot: #fff0a6; }
 .cal-bar.open-l { margin-left: -1px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .cal-bar.open-r { margin-right: -1px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .cal-bar.c0 { background: #bcdcff; } .cal-bar.c1 { background: #ffd9b8; } .cal-bar.c2 { background: #bdecd2; }
@@ -159,7 +168,6 @@ details[open] summary { margin-bottom: 4px; }
 @media (max-width: 560px) {
   .card { padding: 18px; }
   .cal-day { min-height: 48px; padding: 4px; }
-  .cal-bar { font-size: 11px; padding: 0 6px; }
 }
 
 /* ── 할 일 ── */
