@@ -261,3 +261,16 @@ label button.ghost { align-self: flex-start; padding: 6px 12px; font-size: 13px;
 @media (max-width: 640px) {
   th { white-space: nowrap; padding-right: 14px; }
 }
+
+/* ── 선택한 날 패널: 바로 완료 / 바로 추가 ── */
+.day-tasks li { align-items: center; gap: 10px; }
+.day-tasks .check { width: 24px; height: 24px; font-size: 14px; margin-top: 0; }
+.day-task-text { flex: 1; min-width: 0; word-break: break-word; }
+.mini-link { flex-shrink: 0; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+.mini-link:hover { filter: brightness(1.1); }
+.late-title { color: var(--danger); }
+.inline-note { background: var(--accent-soft); color: var(--text); border-radius: var(--radius-sm); padding: 10px 14px; margin: 0 0 10px; font-weight: 600; font-size: 14px; }
+.inline-note a { color: var(--accent); }
+.quick-add { display: grid; gap: 8px; }
+.quick-add .row { justify-content: space-between; }
+.inline-label { flex-direction: row; align-items: center; gap: 8px; color: var(--sub); }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { api, dateTime, minutes } from "@/lib/format";
+import { toggleTask } from "@/lib/taskActions";
 import type { Completion, Execution, Task } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 
@@ -23,6 +24,7 @@ export default function RecordsView() {
   const [blocker, setBlocker] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState("");
 
   const { data: tasks, reload: reloadTasks } = useApi<Task[]>("/api/tasks?sort=due");
   const { data: execs, error: execError, reload: reloadExecs } = useApi<Execution[]>("/api/executions");
@@ -52,6 +54,7 @@ export default function RecordsView() {
         }),
       });
       setStarted(""); setEnded(""); setActual(""); setActualTouched(false); setBlocker("");
+      setSaved(selectedTask?.title ?? "할 일"); // 할 일은 그대로 선택해 두어 같은 일의 기록을 이어서 남길 수 있다
       reloadExecs(); reloadTasks();
     } catch (e) {
       setError(e instanceof Error ? e.message : "저장 실패");
@@ -63,9 +66,7 @@ export default function RecordsView() {
   async function toggleDone(t: Task) {
     setError("");
     try {
-      await api(`/api/tasks/${t.id}/complete`, t.status === "done"
-        ? { method: "DELETE" }
-        : { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() } });
+      await toggleTask(t);
       reloadTasks(); reloadComps();
     } catch (e) {
       setError(e instanceof Error ? e.message : "처리 실패");
@@ -118,6 +119,11 @@ export default function RecordsView() {
               {" · "}지금까지 기록 {selectedTask.exec_count ?? 0}회 / 실제 {minutes(selectedTask.actual_minutes ?? 0)}
             </p>
           )}
+          {saved && !error && (
+            <p className="inline-note">
+              &quot;{saved}&quot; 기록을 저장했어요. <Link href="/retro">회고에서 확인하기 →</Link>
+            </p>
+          )}
           {error && <p className="error">{error}</p>}
           <div className="row" style={{ marginTop: 12 }}>
             <button disabled={busy || !taskId}>{busy ? "저장 중…" : "실행 기록 저장"}</button>
@@ -133,7 +139,7 @@ export default function RecordsView() {
       <section className="card">
         <h2>기록 목록 <span className="muted">({execs?.length ?? 0}건 · 최근 순)</span></h2>
         {execError && <p className="error">{execError}</p>}
-        {execs?.length === 0 && <p className="muted">아직 실행 기록이 없습니다. 위에서 첫 기록을 남겨 보세요.</p>}
+        {execs?.length === 0 && <p className="muted">아직 실행 기록이 없어요. 할 일을 하고 나서 시작·종료 시각을 남겨 보세요.</p>}
         {execs && execs.length > 0 && (
           <div className="table-wrap">
             <table>
@@ -161,7 +167,7 @@ export default function RecordsView() {
 
       <section className="card">
         <h2>완료 기록 <span className="muted">(유효한 완료 {activeCount}건 · 같은 할 일을 여러 번 눌러도 1건만 남습니다)</span></h2>
-        {comps?.length === 0 && <p className="muted">아직 완료한 할 일이 없습니다.</p>}
+        {comps?.length === 0 && <p className="muted">아직 완료한 할 일이 없어요. 할 일 화면에서 동그라미를 눌러 완료해 보세요.</p>}
         {comps && comps.length > 0 && (
           <div className="table-wrap">
             <table>

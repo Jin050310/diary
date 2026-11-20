@@ -4,14 +4,13 @@ import { useState, useSyncExternalStore } from "react";
 import { api, kstToday, minutes, noopSubscribe, PRIORITY } from "@/lib/format";
 import type { Plan, PlanInput, Task } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
-import Calendar, { monthLabel, WEEKDAYS } from "./Calendar";
+import Calendar, { monthLabel } from "./Calendar";
+import DayPanel from "./DayPanel";
 import PlanForm from "./PlanForm";
-
-const weekdayOf = (iso: string) => WEEKDAYS[new Date(iso + "T00:00:00Z").getUTCDay()];
 
 export default function Home() {
   const { data: plans, error, reload } = useApi<Plan[]>("/api/plans");
-  const { data: tasks } = useApi<Task[]>("/api/tasks?sort=due");
+  const { data: tasks, reload: reloadTasks } = useApi<Task[]>("/api/tasks?sort=due");
   // "오늘"은 브라우저에서만 읽는다. (서버 사전 렌더링 중에는 null → Cache Components 의 new Date() 오류 방지)
   const today = useSyncExternalStore(noopSubscribe, kstToday, () => null);
   const [pickedMonth, setPickedMonth] = useState<{ y: number; m: number } | null>(null);
@@ -30,10 +29,8 @@ export default function Home() {
     setPickedMonth({ y: d.getUTCFullYear(), m: d.getUTCMonth() });
   }
 
-  const activeOnSelected = (plans ?? []).filter(
-    (p) => selected && p.start_date <= selected && p.end_date >= selected,
-  );
-  const dueOnSelected = (tasks ?? []).filter((t) => selected && t.due_date === selected);
+  // 할 일을 바꾸면 달력의 점/개수와 계획 카드의 "할 일 N개"가 함께 갱신되도록 둘 다 다시 불러온다
+  const changed = () => { reloadTasks(); reload(); };
 
   return (
     <>
@@ -73,38 +70,8 @@ export default function Home() {
       </section>
 
       <aside className="side">
-      {selected && plans && (
-        <section className="card">
-          <h2>{Number(selected.slice(5, 7))}월 {Number(selected.slice(8))}일 ({weekdayOf(selected)}){selected === today ? " · 오늘" : ""}</h2>
-          <h3 className="sub">마감 할 일 {dueOnSelected.length}개</h3>
-          {dueOnSelected.length === 0 ? (
-            <p className="muted">이 날짜에 마감인 할 일이 없습니다.</p>
-          ) : (
-            <ul className="day-tasks">
-              {dueOnSelected.map((t) => (
-                <li key={t.id} className={t.status === "done" ? "done" : ""}>
-                  <span className="mark">{t.status === "done" ? "✓" : "○"}</span>
-                  <span>{t.title} <span className="muted">· {t.plan_title}</span></span>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="muted" style={{ marginTop: 10 }}><Link href="/tasks">할 일 화면에서 완료·수정하기 →</Link></p>
-
-          <h3 className="sub">진행 중인 계획 {activeOnSelected.length}개</h3>
-          {activeOnSelected.length === 0 ? (
-            <p className="muted">이 날짜에 진행 중인 계획이 없습니다.</p>
-          ) : (
-            <ul className="day-list">
-              {activeOnSelected.map((p) => (
-                <li key={p.id}>
-                  <Link href={`/plans/${p.id}`}>{p.title}</Link>
-                  <span className={`badge p${p.priority}`}>우선순위 {PRIORITY[p.priority]}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      {selected && today && plans && (
+        <DayPanel selected={selected} today={today} plans={plans} tasks={tasks ?? []} onChanged={changed} />
       )}
 
       <details className="card">

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useDeferredValue, useState, useSyncExternalStore } from "react";
 import { api, kstToday, minutes, noopSubscribe, PRIORITY } from "@/lib/format";
+import { toggleTask } from "@/lib/taskActions";
 import type { Plan, Task, TaskInput } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 import TaskForm from "./TaskForm";
@@ -26,6 +27,7 @@ export default function TasksView() {
   const [dir, setDir] = useState<"asc" | "desc">("asc");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
+  const [notice, setNotice] = useState<{ id: number; title: string } | null>(null);
   const deferredQ = useDeferredValue(q);
 
   const params = new URLSearchParams({ status, due, sort, dir });
@@ -51,11 +53,11 @@ export default function TasksView() {
     setEditingId(null);
     refresh();
   };
-  // 완료: 클릭마다 새 키를 만들지만, 서버가 "할 일당 유효한 완료 1건"을 DB 제약으로 보장한다.
-  const toggle = (t: Task) => run(() =>
-    t.status === "done"
-      ? api(`/api/tasks/${t.id}/complete`, { method: "DELETE" })
-      : api(`/api/tasks/${t.id}/complete`, { method: "POST", headers: { "Idempotency-Key": crypto.randomUUID() } }));
+  // 완료: 클릭마다 새 키를 만들지만, 서버가 "할 일당 유효한 완료 1건"을 DB 제약으로 보장한다. (lib/taskActions.ts)
+  const toggle = (t: Task) => run(async () => {
+    await toggleTask(t);
+    setNotice(t.status === "todo" ? { id: t.id, title: t.title } : null); // 완료하면 바로 기록 남기기로 이어지게 안내
+  });
   const remove = (t: Task) => {
     if (window.confirm(`"${t.title}" 할 일을 삭제할까요?`)) run(() => api(`/api/tasks/${t.id}`, { method: "DELETE" }));
   };
@@ -141,6 +143,11 @@ export default function TasksView() {
         </div>
       </section>
 
+      {notice && (
+        <p className="inline-note">
+          &quot;{notice.title}&quot; 완료! 한 일을 기록으로 남길까요? <Link href={`/records?task=${notice.id}`}>실행 기록 남기기 →</Link>
+        </p>
+      )}
       {(error || actionError) && <p className="error">{error || actionError}</p>}
       {tasks === null && !error && <p className="muted">불러오는 중…</p>}
       {tasks && (
@@ -149,7 +156,7 @@ export default function TasksView() {
         </p>
       )}
       {tasks?.length === 0 && (
-        <p className="muted">{filtered ? "조건에 맞는 할 일이 없습니다." : "아직 할 일이 없습니다. 위에서 등록해 보세요."}</p>
+        <p className="muted">{filtered ? "조건에 맞는 할 일이 없어요. 위의 '검색·필터 초기화'를 눌러 보세요." : "아직 할 일이 없어요. 위의 '+ 새 할 일 등록'에서 첫 할 일을 만들어 보세요."}</p>
       )}
 
       <div className="task-list">
