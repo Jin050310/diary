@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { api, minutes as fmtLong } from "@/lib/format";
-import { fmtMin, WEEKDAY_NAMES, type DirectionResponse, type Improvement, type SeriesPoint } from "@/lib/directionCalc";
-import type { Plan } from "@/lib/types";
+import { api, dueLabel, mdKo, daysBetween, shortMin, minutes as fmtLong } from "@/lib/format";
+import { WEEKDAY_NAMES, fmtMin, type DirectionResponse, type Improvement, type SeriesPoint } from "@/lib/directionCalc";
+import type { Plan, Task } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
+import { Chips, PageHead, Stat } from "../ui";
 
 const mmdd = (iso: string) => iso.slice(5).replace("-", "/");
 const pctText = (r: number | null) => (r === null ? "-" : `${Math.round(r * 100)}%`);
@@ -21,25 +22,26 @@ export default function DirectionView() {
   const [picked, setPicked] = useState("");
   if (error) return <p className="error">{error}</p>;
   if (!plans) return <p className="muted">불러오는 중…</p>;
-  if (plans.length === 0) return <p className="muted">먼저 계획을 등록해 주세요.</p>;
+  if (plans.length === 0) return <p className="muted">먼저 달력 화면에서 프로젝트를 만들어 주세요.</p>;
 
-  // 기본은 예상 시간이 가장 큰 계획(= 가장 큰 프로젝트)
+  // 처음에는 예상 시간이 가장 큰 프로젝트를 보여 준다
   const biggest = [...plans].sort((a, b) => b.estimated_minutes - a.estimated_minutes || a.id - b.id)[0];
   const planId = picked || String(biggest.id);
+  const few = plans.length <= 4;
 
   return (
     <>
-      <h1>진행 방향</h1>
-      <p className="muted" style={{ margin: "-8px 4px 16px" }}>
-        큰 프로젝트가 계획대로 가고 있는지, 어느 쪽으로 빗나가고 있는지를 할 일과 실행 기록으로 계산해 보여 줘요. 새로 입력할 건 없어요. 지표나 주별 숫자를 누르면 근거 기록으로 이동해요.
-      </p>
-      <section className="card">
-        <label>어떤 계획(프로젝트)을 볼까요?
-          <select value={planId} onChange={(e) => setPicked(e.target.value)}>
-            {plans.map((p) => <option key={p.id} value={p.id}>{p.title} · 예상 {fmtLong(p.estimated_minutes)}</option>)}
-          </select>
-          <span className="muted">처음에는 예상 시간이 가장 큰 계획을 선택해요.</span>
-        </label>
+      <PageHead title="진행 방향" hint="큰 프로젝트가 계획대로 가고 있는지 한눈에 봐요. 숫자를 누르면 근거 기록으로 이동해요." />
+      <section className="card plan-pick">
+        {few ? (
+          <Chips label="프로젝트" value={planId} onChange={setPicked} options={plans.map((p) => ({ value: String(p.id), label: p.title }))} />
+        ) : (
+          <label className="inline-select">프로젝트
+            <select value={planId} onChange={(e) => setPicked(e.target.value)}>
+              {plans.map((p) => <option key={p.id} value={p.id}>{p.title} · 예상 {fmtLong(p.estimated_minutes)}</option>)}
+            </select>
+          </label>
+        )}
       </section>
       <Body key={planId} planId={Number(planId)} />
     </>
@@ -48,6 +50,7 @@ export default function DirectionView() {
 
 function Body({ planId }: { planId: number }) {
   const { data: d, error, reload } = useApi<DirectionResponse>(`/api/direction?plan=${planId}`);
+  const { data: openTasks } = useApi<Task[]>(`/api/tasks?plan=${planId}&status=todo&sort=due`);
   const [saved, setSaved] = useState<string[]>([]);
   const [saveError, setSaveError] = useState("");
 
@@ -67,179 +70,220 @@ function Body({ planId }: { planId: number }) {
     }
   }
 
-  const paceLabel = p.pace === "behind" ? `${fmtMin(-p.gap)} 뒤처짐` : p.pace === "ahead" ? `${fmtMin(p.gap)} 앞섬` : "계획대로";
+  const left = daysBetween(d.today, d.plan.end_date);
+  const week = d.weeks.find((w) => d.today >= w.start && d.today <= w.end);
   const maxWeek = Math.max(1, ...d.weeks.map((w) => Math.max(w.planned, w.actual)));
   const maxDay = Math.max(1, ...pt.weekday);
+  const title = noTasks ? "할 일을 추가하면 방향을 볼 수 있어요"
+    : p.pace === "behind" ? `계획보다 ${shortMin(-p.gap)} 뒤처졌어요`
+    : p.pace === "ahead" ? `계획보다 ${shortMin(p.gap)} 앞서 있어요`
+    : "계획대로 가고 있어요";
+  const sub = noTasks ? "달력에서 날짜를 눌러 할 일을 넣어 보세요."
+    : p.planned_to_date === 0 ? "아직 마감이 지났거나 오늘인 할 일이 없어요."
+    : `오늘까지 끝냈어야 할 분량 ${shortMin(p.planned_to_date)} 중 ${shortMin(p.done_total_est)}을 끝냈어요.`;
+  const next = (openTasks ?? []).slice(0, 4);
+  const sugCount = d.verdict.suggestions.length;
 
   return (
     <>
-      {/* ① 한 줄 요약 */}
-      <section className="card">
-        <h2>{d.plan.title} <span className="muted">· 기준일 {d.today}</span></h2>
-        <div className="metric-grid dir-cards">
-          <Link href={retroHref(planId, "done")} className={`metric metric-link${p.pace === "behind" ? " bad" : ""}`}>
-            <span className="metric-label">완료한 분량</span>
-            <span className="metric-value">{pctText(p.percent_done)}</span>
-            <span className="metric-hint">계획상 오늘까지는 {pctText(p.percent_planned)}</span>
-          </Link>
-          <Link href={retroHref(planId, "tasks")} className={`metric metric-link${p.pace === "behind" ? " bad" : ""}`}>
-            <span className="metric-label">계획 대비 속도</span>
-            <span className="metric-value" style={{ fontSize: 18 }}>{noTasks ? "-" : paceLabel}</span>
-            <span className="metric-hint">마감 지난 미완료 {fmtMin(p.overdue_open_est)}</span>
-          </Link>
-          <Link href={retroHref(planId, "diff")} className={`metric metric-link${pt.bias.ratio !== null && pt.bias.ratio > 1.1 ? " bad" : ""}`}>
-            <span className="metric-label">예상 대비 실제</span>
-            <span className="metric-value">{biasText(pt.bias.ratio)}</span>
-            <span className="metric-hint">끝낸 할 일 {pt.bias.n}개 기준</span>
-          </Link>
-          <a href="#late-evidence" className={`metric metric-link${pt.delay.rate !== null && pt.delay.rate >= 0.3 ? " bad" : ""}`}>
-            <span className="metric-label">제때 못 끝낸 비율</span>
-            <span className="metric-value">{pctText(pt.delay.rate)}</span>
-            <span className="metric-hint">마감 지난 {pt.delay.past_due}개 중 {pt.delay.late_open + pt.delay.late_done}개</span>
-          </a>
-        </div>
-        <ul className="dir-lines">
-          {d.verdict.lines.map((l) => <li key={l}>{l}</li>)}
-        </ul>
-        {t.no_due_count > 0 && <p className="muted">마감일이 없는 할 일 {t.no_due_count}개는 계획 속도 계산에서 빠져요.</p>}
+      {/* ① 결론 먼저 */}
+      <section className={`hero ${noTasks ? "none" : p.pace}`}>
+        <div className="hero-plan">{d.plan.title}</div>
+        <h2 className="hero-title">{title}</h2>
+        <p className="hero-sub">{sub}</p>
+        {p.overdue_open_est > 0 && <p className="hero-warn">기한이 지났는데 아직 안 끝난 분량이 {shortMin(p.overdue_open_est)} 있어요.</p>}
       </section>
 
-      {/* ② 계획 대비 진행 */}
+      <div className="stat-grid dir-stats">
+        <Link href={retroHref(planId, "done")} className="stat">
+          <span className="stat-label">끝낸 일</span>
+          <span className="stat-value">{t.done_count}<span className="stat-unit">/{t.task_count}개</span></span>
+          <span className="stat-hint">전체의 {pctText(p.percent_done)} (예상 시간 기준)</span>
+        </Link>
+        <Stat label="남은 기간" value={left < 0 ? "종료" : left === 0 ? "오늘까지" : `D-${left}`} hint={`${mdKo(d.plan.end_date)}까지`} />
+        <Link href={retroHref(planId, "diff")} className="stat">
+          <span className="stat-label">예상과 실제</span>
+          <span className="stat-value">{biasText(pt.bias.ratio)}</span>
+          <span className="stat-hint">{pt.bias.ratio === null ? "끝낸 일 중 기록이 있는 게 아직 없어요" : pt.bias.ratio > 1.1 ? `예상보다 오래 걸려요 (끝낸 ${pt.bias.n}개 기준)` : pt.bias.ratio < 0.9 ? `예상보다 빨리 끝나요 (끝낸 ${pt.bias.n}개 기준)` : `예상과 비슷해요 (끝낸 ${pt.bias.n}개 기준)`}</span>
+        </Link>
+        <Link href={week ? retroHref(planId, "tasks", week.start, week.end) : retroHref(planId, "tasks")} className="stat">
+          <span className="stat-label">이번 주</span>
+          <span className="stat-value small">{week ? `${shortMin(week.planned)} 계획` : "-"}</span>
+          <span className="stat-hint">{week ? `실제 ${shortMin(week.actual)} · 마감 ${week.due_count}개 중 ${week.done_count}개 완료` : "이번 주 계획이 없어요"}</span>
+        </Link>
+      </div>
+
+      {/* ② 지금 해야 할 것 */}
       <section className="card">
-        <h2>계획 대비 진행 <span className="muted">(누적, 분)</span></h2>
+        <div className="rec-top">
+          <h2>다음에 할 일</h2>
+          <Link href="/tasks" className="muted">할 일 전체 보기 →</Link>
+        </div>
+        {next.length === 0 ? <p className="muted empty">{noTasks ? "아직 할 일이 없어요." : "남은 할 일이 없어요 🎉"}</p> : (
+          <ul className="trow-list">
+            {next.map((x) => {
+              const dl = dueLabel(x.due_date, d.today);
+              return (
+                <li key={x.id} className="trow">
+                  <div className="t-main">
+                    <div className="t-title">{x.title}</div>
+                    <div className="t-sub">
+                      <span className={dl.tone === "late" ? "due-late" : dl.tone === "soon" ? "due-soon" : ""}>{dl.text}</span>
+                      <span>예상 {shortMin(x.estimated_minutes)}</span>
+                    </div>
+                  </div>
+                  <div className="t-actions"><Link href={`/records?task=${x.id}`} className="btn-link">기록하기</Link></div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* ③ 계획 대비 진행 그래프 */}
+      <section className="card">
+        <h2>계획 대비 진행</h2>
         <div className="chart-legend">
-          <span><i className="lg plan" />계획 (마감일 기준으로 끝냈어야 할 분량)</span>
-          <span><i className="lg done" />완료 (끝낸 할 일의 예상 시간)</span>
-          <span><i className="lg act" />투입 (실제로 쓴 시간)</span>
+          <span><i className="lg plan" />계획 (마감일까지 끝냈어야 할 분량)</span>
+          <span><i className="lg done" />완료 (끝낸 할 일)</span>
+          <span><i className="lg act" />쓴 시간 (실제 작업)</span>
         </div>
         <Chart series={d.series} today={d.today} />
-        <p className="muted">계획선보다 완료선이 아래에 있으면 뒤처진 거예요. 투입선이 완료선보다 위에 있으면 예상보다 시간을 더 쓰고 있다는 뜻이에요.</p>
+        <p className="muted">파란 선(완료)이 점선(계획)보다 아래면 뒤처진 거예요. 주황 선(쓴 시간)이 파란 선보다 위면 예상보다 시간을 더 쓰고 있다는 뜻이에요.</p>
       </section>
 
-      {/* ③ 주별 추이 */}
-      <section className="card">
-        <h2>주별 추이 <span className="muted">(월~일)</span></h2>
-        {d.trend.state && (
-          <p className={`inline-note${d.trend.state === "widening" ? " warn" : ""}`}>
-            {d.trend.state === "widening" ? "최근 두 주 사이 계획과 실제의 차이가 벌어지고 있어요" : d.trend.state === "narrowing" ? "최근 두 주 사이 계획과 실제의 차이가 좁혀지고 있어요" : "최근 두 주의 차이는 비슷해요"}
-            {" "}({fmtMin(d.trend.from as number)} 차이 → {fmtMin(d.trend.to as number)} 차이)
-          </p>
-        )}
-        <div className="week-list">
-          {d.weeks.map((w) => (
-            <div key={w.start} className={`week-row${w.future ? " future" : ""}`}>
-              <div className="week-name">{mmdd(w.start)}~{mmdd(w.end)}{w.future && <span className="muted"> 예정</span>}</div>
-              <div className="week-bars">
-                <div className="bar-line"><span className="bar plan" style={{ width: `${(w.planned / maxWeek) * 100}%` }} /><em><Link href={retroHref(planId, "tasks", w.start, w.end)}>계획 {w.planned}분 · 근거</Link></em></div>
-                <div className="bar-line"><span className="bar act" style={{ width: `${(w.actual / maxWeek) * 100}%` }} /><em>실제 {w.actual}분 · <Link href={retroHref(planId, "actual")}>전체 기록</Link></em></div>
+      {/* ④ 자세히: 필요할 때만 펼친다 */}
+      <details className="acc">
+        <summary>
+          <span>주별로 보기 <span className="acc-hint">{d.trend.state === "widening" ? "최근 차이가 벌어지는 중" : d.trend.state === "narrowing" ? "최근 차이가 좁혀지는 중" : `${d.weeks.length}주`}</span></span>
+        </summary>
+        <div className="acc-body">
+          {d.trend.state && (
+            <p className={`inline-note${d.trend.state === "widening" ? " warn" : ""}`}>
+              {d.trend.state === "widening" ? "최근 두 주 사이 계획과 실제의 차이가 벌어지고 있어요" : d.trend.state === "narrowing" ? "최근 두 주 사이 계획과 실제의 차이가 좁혀지고 있어요" : "최근 두 주의 차이는 비슷해요"}
+              {" "}({fmtMin(d.trend.from as number)} 차이 → {fmtMin(d.trend.to as number)} 차이)
+            </p>
+          )}
+          <div className="week-list">
+            {d.weeks.map((w) => (
+              <div key={w.start} className={`week-row${w.future ? " future" : ""}`}>
+                <div className="week-name">{mmdd(w.start)}~{mmdd(w.end)}{w.future && <span className="muted"> 예정</span>}</div>
+                <div className="week-bars">
+                  <div className="bar-line"><span className="bar plan" style={{ width: `${(w.planned / maxWeek) * 100}%` }} /><em><Link href={retroHref(planId, "tasks", w.start, w.end)}>계획 {w.planned}분 · 근거</Link></em></div>
+                  <div className="bar-line"><span className="bar act" style={{ width: `${(w.actual / maxWeek) * 100}%` }} /><em>실제 {w.actual}분 · <Link href={retroHref(planId, "actual")}>전체 기록</Link></em></div>
+                </div>
+                <div className="week-meta">
+                  마감 {w.due_count}개 · 완료 {w.done_count}
+                  {w.late_open > 0 && <span className="late"> · 못 끝냄 {w.late_open}</span>}
+                  {w.late_done > 0 && <span className="muted"> · 늦게 끝냄 {w.late_done}</span>}
+                </div>
               </div>
-              <div className="week-meta">
-                마감 {w.due_count}개 · 완료 {w.done_count}
-                {w.late_open > 0 && <span className="late"> · 못 끝냄 {w.late_open}</span>}
-                {w.late_done > 0 && <span className="muted"> · 늦게 끝냄 {w.late_done}</span>}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </section>
+      </details>
 
-      {/* ④ 빗나감 패턴 */}
-      <section className="card">
-        <h2>반복해서 빗나가는 패턴</h2>
-        <div className="pattern-grid">
-          <div>
-            <h3 className="sub"><Link href={retroHref(planId, "diff")}>예상 vs 실제 (태그별) · 근거 보기</Link></h3>
-            {pt.bias.ratio === null ? <p className="muted">끝낸 할 일 중 실행 기록이 있는 게 아직 없어요.</p> : (
-              <>
-                <p>전체 <strong>{biasText(pt.bias.ratio)}</strong> <span className="muted">(예상 {pt.bias.est}분 → 실제 {pt.bias.actual}분, {pt.bias.n}개)</span></p>
+      <details className="acc">
+        <summary>
+          <span>반복해서 빗나가는 패턴 <span className="acc-hint">예상 대비 {biasText(pt.bias.ratio)} · 막힘 {pt.blocked.execs_with}건 · 제때 못 끝냄 {pctText(pt.delay.rate)}</span></span>
+        </summary>
+        <div className="acc-body">
+          <div className="pattern-grid">
+            <div>
+              <h3 className="sub"><Link href={retroHref(planId, "diff")}>예상 vs 실제 (태그별) · 근거 보기</Link></h3>
+              {pt.bias.ratio === null ? <p className="muted">끝낸 할 일 중 실행 기록이 있는 게 아직 없어요.</p> : (
+                <>
+                  <p>전체 <strong>{biasText(pt.bias.ratio)}</strong> <span className="muted">(예상 {pt.bias.est}분 → 실제 {pt.bias.actual}분, {pt.bias.n}개)</span></p>
+                  <ul className="plain-list">
+                    {pt.by_tag.map((x) => (
+                      <li key={x.tag}><span className="badge tag">{x.tag}</span> {biasText(x.ratio)} <span className="muted">({x.n}개)</span></li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+            <div>
+              <h3 className="sub"><Link href={retroHref(planId, "blocked")}>막힘 사유 ({pt.blocked.execs_with}/{pt.blocked.execs_total}건에 적힘) · 근거 보기</Link></h3>
+              {pt.blockers.length === 0 ? <p className="muted">두 번 이상 반복된 낱말은 아직 없어요.</p> : (
                 <ul className="plain-list">
-                  {pt.by_tag.map((x) => (
-                    <li key={x.tag}><span className="badge tag">{x.tag}</span> {biasText(x.ratio)} <span className="muted">({x.n}개)</span></li>
+                  {pt.blockers.map((b) => (
+                    <li key={b.word}><strong>{b.word}</strong> <span className="muted">{b.count}번 · 예: &quot;{b.example}&quot;</span></li>
                   ))}
                 </ul>
-              </>
-            )}
-          </div>
-          <div>
-            <h3 className="sub"><Link href={retroHref(planId, "blocked")}>막힘 사유 ({pt.blocked.execs_with}/{pt.blocked.execs_total}건에 적힘) · 근거 보기</Link></h3>
-            {pt.blockers.length === 0 ? <p className="muted">두 번 이상 반복된 낱말은 아직 없어요.</p> : (
-              <ul className="plain-list">
-                {pt.blockers.map((b) => (
-                  <li key={b.word}><strong>{b.word}</strong> <span className="muted">{b.count}번 · 예: &quot;{b.example}&quot;</span></li>
+              )}
+              <p className="muted">낱말은 조사를 대충 떼서 세는 근사값이라, 같은 말도 조금 다르게 나뉠 수 있어요.</p>
+            </div>
+            <div>
+              <h3 className="sub">요일별로 실제 작업한 시간 (분)</h3>
+              <div className="weekday-chart" role="img" aria-label="요일별 실제 작업 시간">
+                {pt.weekday.map((m, i) => (
+                  <div key={i} className="wd">
+                    <span className="wd-val">{m}</span>
+                    <span className="wd-bar" style={{ height: `${(m / maxDay) * 80 + (m ? 4 : 1)}px` }} />
+                    <span className="wd-name">{WEEKDAY_NAMES[i]}</span>
+                  </div>
                 ))}
-              </ul>
-            )}
-            <p className="muted">낱말은 조사를 대충 떼서 세는 근사값이라, 같은 말도 조금 다르게 나뉠 수 있어요.</p>
-          </div>
-          <div>
-            <h3 className="sub">요일별로 실제 작업한 시간</h3>
-            <div className="weekday-chart" role="img" aria-label="요일별 실제 작업 시간">
-              {pt.weekday.map((m, i) => (
-                <div key={i} className="wd">
-                  <span className="wd-val">{m}</span>
-                  <span className="wd-bar" style={{ height: `${(m / maxDay) * 80 + (m ? 4 : 1)}px` }} />
-                  <span className="wd-name">{WEEKDAY_NAMES[i]}</span>
-                </div>
-              ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="sub">가장 많이 어긋난 할 일</h3>
+              {pt.off_tasks.length === 0 ? <p className="muted">실행 기록이 있는 할 일이 아직 없어요.</p> : (
+                <ul className="plain-list">
+                  {pt.off_tasks.map((o) => (
+                    <li key={o.id}><Link href={`/records?task=${o.id}`}>{o.title}</Link> <span className="muted">예상 {o.est}분 → 실제 {o.actual}분 ({o.diff > 0 ? "+" : ""}{o.diff}분)</span></li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
-          <div>
-            <h3 className="sub">가장 많이 어긋난 할 일</h3>
-            {pt.off_tasks.length === 0 ? <p className="muted">실행 기록이 있는 할 일이 아직 없어요.</p> : (
-              <ul className="plain-list">
-                {pt.off_tasks.map((o) => (
-                  <li key={o.id}><Link href={`/records?task=${o.id}`}>{o.title}</Link> <span className="muted">예상 {o.est}분 → 실제 {o.actual}분 ({o.diff > 0 ? "+" : ""}{o.diff}분)</span></li>
+          <details id="late-evidence" className="late-details" open={pt.late_tasks.length > 0 && pt.late_tasks.length <= 6}>
+            <summary><strong>제때 끝나지 않은 할 일 {pt.late_tasks.length}개</strong> <span className="muted">(숫자의 근거)</span></summary>
+            {pt.late_tasks.length === 0 ? <p className="muted">마감이 지난 할 일이 모두 제때 끝났거나, 아직 마감이 지난 할 일이 없어요.</p> : (
+              <ul className="plain-list" style={{ marginTop: 10 }}>
+                {pt.late_tasks.map((l) => (
+                  <li key={l.id}>
+                    <span className={`badge ${l.state === "open" ? "p1" : "p3"}`}>{l.state === "open" ? "아직 못 끝냄" : `${mmdd(l.completed_on as string)}에 끝냄`}</span>{" "}
+                    <Link href={`/records?task=${l.id}`}>{l.title}</Link> <span className="muted">마감 {l.due_date} · 예상 {l.est}분</span>
+                  </li>
                 ))}
               </ul>
             )}
-          </div>
+          </details>
         </div>
-        <details id="late-evidence" className="late-details" open={pt.late_tasks.length > 0 && pt.late_tasks.length <= 6}>
-          <summary><strong>제때 끝나지 않은 할 일 {pt.late_tasks.length}개</strong> <span className="muted">(숫자의 근거)</span></summary>
-          {pt.late_tasks.length === 0 ? <p className="muted">마감이 지난 할 일이 모두 제때 끝났거나, 아직 마감이 지난 할 일이 없어요.</p> : (
-            <ul className="plain-list" style={{ marginTop: 10 }}>
-              {pt.late_tasks.map((l) => (
-                <li key={l.id}>
-                  <span className={`badge ${l.state === "open" ? "p1" : "p3"}`}>{l.state === "open" ? "아직 못 끝냄" : `${mmdd(l.completed_on as string)}에 끝냄`}</span>{" "}
-                  <Link href={`/records?task=${l.id}`}>{l.title}</Link> <span className="muted">마감 {l.due_date} · 예상 {l.est}분</span>
-                </li>
-              ))}
-            </ul>
+      </details>
+
+      <details className="acc" open={sugCount > 0}>
+        <summary>
+          <span>개선점 <span className="acc-hint">후보 {sugCount}개 · 저장한 개선점 {d.improvements.length}개</span></span>
+        </summary>
+        <div className="acc-body">
+          <h3 className="sub">이 결과로 정해 볼 만한 개선점</h3>
+          {sugCount === 0 ? <p className="muted">지금은 눈에 띄는 반복 패턴이 없어요. 실행 기록이 더 쌓이면 제안이 나와요.</p> : (
+            <>
+              <p className="muted" style={{ marginBottom: 10 }}>계산 결과에서 자동으로 만든 <strong>후보</strong>예요. 맞다고 생각하는 것만 저장하세요. 저장하면 회고의 개선점이 되고, 거기서 다음 계획에 반영할 수 있어요.</p>
+              <ul className="suggest-list">
+                {d.verdict.suggestions.map((s) => (
+                  <li key={s}>
+                    <span>{s}</span>
+                    {saved.includes(s) || d.improvements.some((n) => n.improvement === s)
+                      ? <span className="badge">저장됨</span>
+                      : <button type="button" className="ghost" onClick={() => saveNote(s)}>개선점으로 저장</button>}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
-        </details>
-      </section>
+          {saveError && <p className="error">{saveError}</p>}
+          {saved.length > 0 && <p className="inline-note">저장했어요. <Link href="/retro">회고에서 다음 계획 만들기 →</Link></p>}
 
-      {/* ⑤ 개선점 제안 → 회고 */}
-      <section className="card">
-        <h2>이 결과로 정해 볼 만한 개선점</h2>
-        {d.verdict.suggestions.length === 0 ? <p className="muted">지금은 눈에 띄는 반복 패턴이 없어요. 실행 기록이 더 쌓이면 제안이 나와요.</p> : (
-          <>
-            <p className="muted" style={{ marginBottom: 10 }}>계산 결과에서 자동으로 만든 <strong>후보</strong>예요. 맞다고 생각하는 것만 저장하세요. 저장하면 회고의 개선점이 되고, 거기서 다음 계획에 반영할 수 있어요.</p>
-            <ul className="suggest-list">
-              {d.verdict.suggestions.map((s) => (
-                <li key={s}>
-                  <span>{s}</span>
-                  {saved.includes(s) || d.improvements.some((n) => n.improvement === s)
-                    ? <span className="badge">저장됨</span>
-                    : <button type="button" className="ghost" onClick={() => saveNote(s)}>개선점으로 저장</button>}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-        {saveError && <p className="error">{saveError}</p>}
-        {saved.length > 0 && <p className="inline-note">저장했어요. <Link href="/retro">회고에서 다음 계획 만들기 →</Link></p>}
-      </section>
-
-      {/* ⑥ 개선점 효과 */}
-      <section className="card">
-        <h2>정한 개선점이 효과가 있었을까</h2>
-        {d.improvements.length === 0 ? <p className="muted">아직 이 계획에서 정한 개선점이 없어요. 위 제안을 저장하거나 회고에서 직접 적어 보세요.</p> : (
-          <div style={{ display: "grid", gap: 14 }}>
-            {d.improvements.map((n) => <Effect key={n.note_id} n={n} title={d.plan.title} />)}
-          </div>
-        )}
-      </section>
+          <h3 className="sub" style={{ marginTop: 22 }}>정한 개선점이 효과가 있었을까</h3>
+          {d.improvements.length === 0 ? <p className="muted">아직 이 프로젝트에서 정한 개선점이 없어요. 위 후보를 저장하거나 회고에서 직접 적어 보세요.</p> : (
+            <div style={{ display: "grid", gap: 14 }}>
+              {d.improvements.map((n) => <Effect key={n.note_id} n={n} title={d.plan.title} />)}
+            </div>
+          )}
+        </div>
+      </details>
     </>
   );
 }
@@ -260,7 +304,7 @@ function Chart({ series, today }: { series: SeriesPoint[]; today: string }) {
   const axis = (v: number) => (maxY >= 120 ? `${Math.round(v / 60)}시간` : `${v}분`);
   const xs = [0, Math.floor(series.length / 2), series.length - 1];
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="계획, 완료, 투입 시간의 누적 그래프">
+    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="계획, 완료, 쓴 시간의 누적 그래프">
       {ticks.map((v) => (
         <g key={v}>
           <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} className="grid-line" />
@@ -271,7 +315,7 @@ function Chart({ series, today }: { series: SeriesPoint[]; today: string }) {
       {ti >= 0 && (
         <g>
           <line x1={x(ti)} x2={x(ti)} y1={T} y2={H - B} className="today-line" />
-          <text x={x(ti)} y={T + 10} textAnchor="middle" className="today-text">오늘</text>
+          <text x={Math.max(x(ti), L + 18)} y={T + 10} textAnchor="middle" className="today-text">오늘</text>
         </g>
       )}
       <path d={path("planned")} className="ln plan" fill="none" />
