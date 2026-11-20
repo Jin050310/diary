@@ -6,6 +6,7 @@ import type { Plan, Task } from "@/lib/types";
 const DAY_MS = 86400000;
 const toIso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 export const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+const SHOW_CHIPS = 2; // 칸 안에 이름을 보여 줄 할 일 수 (넓은 화면에서만 보임)
 
 export function monthLabel(y: number, m: number) {
   return `${y}년 ${m + 1}월`;
@@ -23,6 +24,8 @@ function weeksOf(y: number, m: number) {
   return weeks;
 }
 
+// 칸 하나는: 날짜 숫자 + 마감 개수, 그날 마감 할 일 이름(최대 2개, 계획 색), 진행 중인 계획 색 점.
+// (예전의 기간 막대는 계획이 겹치면 줄무늬처럼 쌓여서 없앴다. 계획 기간은 범례·점·오른쪽 패널에서 확인)
 export default function Calendar({
   year, month, today, selected, plans, tasks, onSelect,
 }: {
@@ -35,15 +38,14 @@ export default function Calendar({
   onSelect: (iso: string) => void;
 }) {
   const sorted = [...plans].sort((a, b) => a.id - b.id);
-  // 날짜별 마감 할 일 수 (전체 / 남은 것)
-  const due = new Map<string, { all: number; left: number }>();
+
+  // 날짜별 마감 할 일 (남은 것 먼저)
+  const byDay = new Map<string, Task[]>();
   for (const t of tasks) {
     if (!t.due_date) continue;
-    const c = due.get(t.due_date) ?? { all: 0, left: 0 };
-    c.all++;
-    if (t.status === "todo") c.left++;
-    due.set(t.due_date, c);
+    byDay.set(t.due_date, [...(byDay.get(t.due_date) ?? []), t]);
   }
+  for (const list of byDay.values()) list.sort((a, b) => (a.status === b.status ? a.id - b.id : a.status === "todo" ? -1 : 1));
 
   // 이번 달에 걸쳐 있는 계획만 범례에 표시
   const monthStart = toIso(Date.UTC(year, month, 1));
@@ -52,88 +54,55 @@ export default function Calendar({
 
   return (
     <>
-    {legend.length > 0 && (
-      <div className="cal-legend" aria-label="계획 색상 범례">
-        {legend.map((p) => (
-          <Link key={p.id} href={`/plans/${p.id}`} className={`legend-chip c${p.id % 6}`} title={`${p.start_date} ~ ${p.end_date}`}>
-            {p.title}
-          </Link>
-        ))}
-      </div>
-    )}
-    <div className="cal" role="grid" aria-label={monthLabel(year, month)}>
-      <div className="cal-head" role="row">
-        {WEEKDAYS.map((d, i) => (
-          <div key={d} role="columnheader" className={i === 0 ? "sun" : i === 6 ? "sat" : ""}>{d}</div>
-        ))}
-      </div>
-      {weeksOf(year, month).map((days) => {
-        const bars = sorted
-          .filter((p) => p.start_date <= days[6] && p.end_date >= days[0])
-          .map((p) => {
-            const s = p.start_date > days[0] ? p.start_date : days[0];
-            const e = p.end_date < days[6] ? p.end_date : days[6];
-            return {
-              p,
-              col: days.indexOf(s) + 1,
-              end: days.indexOf(e) + 2,
-              openLeft: p.start_date < days[0],
-              openRight: p.end_date > days[6],
-            };
-          });
-        return (
-          <div
-            key={days[0]}
-            className="cal-week"
-            role="row"
-            style={{ gridTemplateRows: `30px repeat(${Math.max(bars.length, 1)}, 12px)` }}
-          >
+      {legend.length > 0 && (
+        <div className="cal-legend" aria-label="계획 색상 범례">
+          {legend.map((p) => (
+            <Link key={p.id} href={`/plans/${p.id}`} className={`legend-chip c${p.id % 6}`} title={`${p.start_date} ~ ${p.end_date}`}>
+              {p.title}
+              <span className="legend-period">{p.start_date.slice(5).replace("-", "/")}~{p.end_date.slice(5).replace("-", "/")}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+      <div className="cal" role="grid" aria-label={monthLabel(year, month)}>
+        <div className="cal-head" role="row">
+          {WEEKDAYS.map((d, i) => (
+            <div key={d} role="columnheader" className={i === 0 ? "sun" : i === 6 ? "sat" : ""}>{d}</div>
+          ))}
+        </div>
+        {weeksOf(year, month).map((days) => (
+          <div key={days[0]} className="cal-week" role="row">
             {days.map((d, i) => {
               const inMonth = Number(d.slice(5, 7)) - 1 === month;
-              const cls = [
-                "cal-day",
-                inMonth ? "" : "out",
-                d === today ? "today" : "",
-                d === selected ? "selected" : "",
-                i === 0 ? "sun" : i === 6 ? "sat" : "",
-              ].join(" ");
+              const list = byDay.get(d) ?? [];
+              const left = list.filter((t) => t.status === "todo").length;
+              const active = sorted.filter((p) => p.start_date <= d && p.end_date >= d);
+              const cls = ["cal-day", inMonth ? "" : "out", d === today ? "today" : "", d === selected ? "selected" : "", i === 0 ? "sun" : i === 6 ? "sat" : ""].join(" ");
               return (
-                <button
-                  key={d}
-                  type="button"
-                  role="gridcell"
-                  aria-selected={d === selected}
-                  className={cls}
-                  style={{ gridColumn: i + 1, gridRow: `1 / span ${Math.max(bars.length, 1) + 1}` }}
-                  onClick={() => onSelect(d)}
-                >
-                  <span className="num">{Number(d.slice(8))}</span>
-                  {due.has(d) && (
-                    <span
-                      className={`due-pill${due.get(d)!.left === 0 ? " all-done" : ""}`}
-                      title={`마감 할 일 ${due.get(d)!.all}개 (남은 것 ${due.get(d)!.left}개)`}
-                    >
-                      {due.get(d)!.left === 0 ? "✓" : due.get(d)!.left}
-                    </span>
-                  )}
+                <button key={d} type="button" role="gridcell" aria-selected={d === selected} className={cls} onClick={() => onSelect(d)}>
+                  <span className="cal-top">
+                    <span className="num">{Number(d.slice(8))}</span>
+                    {list.length > 0 && (
+                      <span className={`due-pill${left === 0 ? " all-done" : ""}`} title={`마감 할 일 ${list.length}개 (남은 것 ${left}개)`}>
+                        {left === 0 ? "✓" : left}
+                      </span>
+                    )}
+                  </span>
+                  <span className="cal-chips">
+                    {list.slice(0, SHOW_CHIPS).map((t) => (
+                      <span key={t.id} className={`cal-chip c${t.plan_id % 6}${t.status === "done" ? " done" : ""}`} title={`${t.title} · ${t.plan_title}`}>{t.title}</span>
+                    ))}
+                    {list.length > SHOW_CHIPS && <span className="cal-more">+{list.length - SHOW_CHIPS}개 더</span>}
+                  </span>
+                  <span className="cal-dots" aria-hidden>
+                    {active.map((p) => <i key={p.id} className={`dot c${p.id % 6}`} />)}
+                  </span>
                 </button>
               );
             })}
-            {bars.map((b, lane) => (
-              <Link
-                key={b.p.id}
-                href={`/plans/${b.p.id}`}
-                title={`${b.p.title} (${b.p.start_date} ~ ${b.p.end_date})`}
-                className={`cal-bar c${b.p.id % 6}${b.openLeft ? " open-l" : ""}${b.openRight ? " open-r" : ""}`}
-                style={{ gridColumn: `${b.col} / ${b.end}`, gridRow: lane + 2 }}
-              >
-                {b.p.title}
-              </Link>
-            ))}
           </div>
-        );
-      })}
-    </div>
+        ))}
+      </div>
     </>
   );
 }

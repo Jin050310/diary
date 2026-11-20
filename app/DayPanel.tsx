@@ -3,8 +3,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { api, PRIORITY } from "@/lib/format";
 import { toggleTask } from "@/lib/taskActions";
-import type { Plan, Task } from "@/lib/types";
+import type { Plan, Task, TaskInput } from "@/lib/types";
 import { WEEKDAYS } from "./Calendar";
+import TaskForm from "./tasks/TaskForm";
 
 const weekdayOf = (iso: string) => WEEKDAYS[new Date(iso + "T00:00:00Z").getUTCDay()];
 
@@ -24,6 +25,7 @@ export default function DayPanel({
   const [minutes, setMinutes] = useState(30);
   const [planPick, setPlanPick] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const active = plans.filter((p) => p.start_date <= selected && p.end_date >= selected);
   const due = tasks.filter((t) => t.due_date === selected);
@@ -40,6 +42,25 @@ export default function DayPanel({
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "처리하지 못했어요");
+    }
+  }
+
+  // 패널 안에서 할 일 수정 (PATCH) — 완료 상태·실행 기록은 건드리지 않는다
+  const update = (id: number) => async (v: TaskInput) => {
+    await api(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(v) });
+    setEditingId(null);
+    onChanged();
+  };
+
+  async function remove(t: Task) {
+    if (!window.confirm(`"${t.title}" 할 일을 삭제할까요?`)) return;
+    setError("");
+    setNotice(null);
+    try {
+      await api(`/api/tasks/${t.id}`, { method: "DELETE" });
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "삭제하지 못했어요");
     }
   }
 
@@ -62,23 +83,32 @@ export default function DayPanel({
     }
   }
 
-  const row = (t: Task, late = false) => (
-    <li key={t.id} className={t.status === "done" ? "done" : ""}>
-      <button
-        type="button"
-        className={`check${t.status === "done" ? " on" : ""}`}
-        aria-label={t.status === "done" ? `${t.title} 완료 취소` : `${t.title} 완료 처리`}
-        onClick={() => toggle(t)}
-      >
-        {t.status === "done" ? "✓" : ""}
-      </button>
-      <span className="day-task-text">
-        {t.title}
-        <span className="muted"> · {t.plan_title}{late && t.due_date ? ` · ${t.due_date} 마감` : ""}</span>
-      </span>
-      <Link href={`/records?task=${t.id}`} className="mini-link">기록</Link>
-    </li>
-  );
+  const row = (t: Task, late = false) =>
+    editingId === t.id ? (
+      <li key={t.id} className="editing">
+        <TaskForm plans={plans} initial={t} submitLabel="수정 저장" onSubmit={update(t.id)} onCancel={() => setEditingId(null)} />
+      </li>
+    ) : (
+      <li key={t.id} className={t.status === "done" ? "done" : ""}>
+        <button
+          type="button"
+          className={`check${t.status === "done" ? " on" : ""}`}
+          aria-label={t.status === "done" ? `${t.title} 완료 취소` : `${t.title} 완료 처리`}
+          onClick={() => toggle(t)}
+        >
+          {t.status === "done" ? "✓" : ""}
+        </button>
+        <span className="day-task-text">
+          {t.title}
+          <span className="muted"> · {t.plan_title}{late && t.due_date ? ` · ${t.due_date} 마감` : ""}</span>
+          <span className="row-actions">
+            <Link href={`/records?task=${t.id}`} className="mini-link">기록</Link>
+            <button type="button" className="mini-btn" onClick={() => { setNotice(null); setEditingId(t.id); }}>수정</button>
+            <button type="button" className="mini-btn danger" onClick={() => remove(t)}>삭제</button>
+          </span>
+        </span>
+      </li>
+    );
 
   return (
     <section className="card">

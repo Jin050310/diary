@@ -1,21 +1,23 @@
-/* 토스 다크 느낌: 순검정이 아닌 회색기 있는 어두운 바탕(#17171c) + 한 단계 밝은 회색 카드(#202027), 파란 포인트 */
+/* 슬레이트 다크: 푸른 기가 도는 회색 바탕 + 한 단계 밝은 카드 + 더 밝은 안쪽 면. 글자는 밝게, 파랑은 글자용(accent)·채움용(accent-strong)으로 나눔 */
 :root {
   color-scheme: dark;
-  --bg: #17171c;
-  --card: #202027;
-  --text: #f2f4f6;
-  --sub: #c3c6cf;
-  --muted: #8b95a1;
-  --line: #33333d;
-  --accent: #4593fc;
-  --accent-press: #6aa9ff;
-  --accent-soft: #2a3447;
+  --bg: #1c2029;          /* 페이지 바탕 */
+  --card: #272c3a;        /* 카드 */
+  --surface: #343b4e;     /* 카드 안쪽 면(입력창·목록 항목·표 머리) */
+  --text: #f4f6fb;
+  --sub: #d3d9e6;
+  --muted: #a9b2c6;
+  --line: #46506a;
+  --accent: #6eb0ff;        /* 링크·강조 글자·테두리 */
+  --accent-strong: #2f7ef2; /* 버튼·오늘·체크 같은 채움 */
+  --accent-press: #1f66d6;
+  --accent-soft: #33415f;
   --on-accent: #ffffff;
-  --warn-bg: #3a2f1c;
-  --warn-text: #ffcf8a;
-  --danger: #ff6b76;
-  --danger-soft: #3a2327;
-  --ok: #3fd19a;
+  --warn-bg: #4a3d22;
+  --warn-text: #ffd89a;
+  --danger: #ff7b86;
+  --danger-soft: #4a2f3a;
+  --ok: #52dba0;
   --radius: 20px;
   --radius-sm: 12px;
 }
@@ -25,7 +27,7 @@ html, body { margin: 0; padding: 0; }
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: "Toss Product Sans", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  font-family: var(--font-sans), "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   font-size: 15px;
   line-height: 1.6;
   letter-spacing: -0.01em;
@@ -81,16 +83,17 @@ h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; margin: 24px 4p
 
 label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--sub); }
 input, select, textarea {
-  font: inherit; font-weight: 500; color: var(--text); background: var(--bg);
-  border: 2px solid transparent; border-radius: var(--radius-sm); padding: 12px 14px; width: 100%;
+  font: inherit; font-weight: 500; color: var(--text); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; width: 100%;
   outline: none; transition: border-color .15s, background .15s;
 }
-input:focus, select:focus, textarea:focus { border-color: var(--accent); background: var(--card); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(110, 176, 255, .22); }
+input::placeholder, textarea::placeholder { color: var(--muted); }
 textarea { min-height: 80px; resize: vertical; }
 
 button {
   font: inherit; font-weight: 700; cursor: pointer; border-radius: var(--radius-sm);
-  padding: 12px 20px; border: 0; background: var(--accent); color: var(--on-accent);
+  padding: 12px 20px; border: 0; background: var(--accent-strong); color: var(--on-accent);
   transition: background .15s, transform .1s;
 }
 button:hover { background: var(--accent-press); }
@@ -106,56 +109,65 @@ button:disabled { opacity: .4; cursor: default; transform: none; }
   background: var(--accent-soft); color: var(--accent);
 }
 .badge.p1 { background: var(--danger-soft); color: var(--danger); }
-.badge.p3 { background: var(--bg); color: var(--muted); }
+.badge.p3 { background: var(--surface); color: var(--sub); }
 
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 12px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { color: var(--muted); font-weight: 600; font-size: 13px; }
+th { color: var(--sub); font-weight: 700; font-size: 13px; }
 tr:last-child td { border-bottom: 0; }
 .table-wrap { overflow-x: auto; }
 
-/* ── 달력 ── */
+/* ── 달력: 칸 격자 + 그날 마감 할 일 이름 + 진행 중인 계획 색 점 ── */
 .cal-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .cal-title h1 { font-size: 24px; }
 .cal-title button { padding: 8px 14px; }
-.cal { padding: 0; }
-.cal-head { display: grid; grid-template-columns: repeat(7, 1fr); }
-.cal-head div { text-align: center; padding: 8px 0; font-size: 13px; color: var(--muted); font-weight: 600; }
-.cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 0 2px; margin-bottom: 2px; }
+.cal { border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; background: var(--card); }
+.cal-head { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--surface); border-bottom: 1px solid var(--line); }
+.cal-head div { text-align: center; padding: 10px 0; font-size: 13px; color: var(--sub); font-weight: 700; }
+.cal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+.cal-week:last-child { border-bottom: 0; }
 .cal-day {
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; text-align: center; border: 0; border-radius: 14px;
-  background: transparent; color: var(--text); padding: 8px 8px; min-height: clamp(64px, 9vh, 110px); cursor: pointer;
-  font-weight: 600; transition: background .12s;
+  display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; text-align: left;
+  border: 0; border-right: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--text);
+  padding: 6px 8px 8px; min-height: clamp(86px, 11vh, 120px); cursor: pointer; font-weight: 600; transition: background .12s;
 }
-.cal-day:hover { background: var(--bg); }
+.cal-week .cal-day:last-child { border-right: 0; }
+.cal-day:hover { background: var(--surface); }
 .cal-day:active { transform: none; }
+.cal-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .cal-day .num { display: inline-block; min-width: 26px; height: 26px; line-height: 26px; text-align: center; border-radius: 999px; font-size: 14px; }
-.cal-day.out { color: var(--muted); opacity: .45; }
+.cal-day.out { background: rgba(0, 0, 0, .14); }
+.cal-day.out .num { color: var(--muted); opacity: .7; }
 .cal-day.sun .num, .cal-head .sun { color: var(--danger); }
 .cal-day.sat .num, .cal-head .sat { color: var(--accent); }
-.cal-day.today .num { background: var(--accent); color: var(--on-accent); }
-.cal-day.selected { background: var(--accent-soft); }
-/* 계획 기간은 얇은 색 줄로 표시하고(주가 길어지지 않게), 색 ↔ 계획 이름은 달력 위 범례로 확인 */
-.cal-bar {
-  z-index: 1; margin: 0 4px; height: 6px; font-size: 0; border-radius: 999px; text-decoration: none;
-  align-self: center; transition: height .12s, filter .12s;
+.cal-day.today .num { background: var(--accent-strong); color: var(--on-accent); }
+.cal-day.selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent); }
+.cal-chips { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.cal-chip {
+  display: block; font-size: 12px; font-weight: 600; line-height: 18px; padding: 0 7px; border-radius: 6px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #10192b; background: var(--dot, #bcdcff);
 }
-.cal-bar:hover { height: 9px; filter: brightness(0.92); }
-.cal-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.cal-chip.done { opacity: .5; text-decoration: line-through; }
+.cal-more { font-size: 11px; color: var(--muted); font-weight: 600; padding-left: 2px; }
+.cal-dots { display: flex; flex-wrap: wrap; gap: 3px; min-height: 8px; }
+.dot { width: 7px; height: 7px; border-radius: 999px; background: var(--dot, #bcdcff); }
+.c0 { --dot: #bcdcff; } .c1 { --dot: #ffd9b8; } .c2 { --dot: #bdecd2; }
+.c3 { --dot: #e1d3fb; } .c4 { --dot: #ffd0da; } .c5 { --dot: #fff0a6; }
+.due-pill {
+  min-width: 20px; height: 20px; line-height: 20px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 800;
+  text-align: center; background: var(--accent-strong); color: var(--on-accent); flex-shrink: 0;
+}
+.due-pill.all-done { background: var(--surface); color: var(--ok); }
+.cal-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .legend-chip {
   display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
-  background: var(--bg); color: var(--text); font-size: 13px; font-weight: 600; text-decoration: none;
+  background: var(--surface); color: var(--text); font-size: 13px; font-weight: 600; text-decoration: none;
 }
 .legend-chip:hover { background: var(--accent-soft); }
 .legend-chip::before { content: ""; width: 10px; height: 10px; border-radius: 999px; background: var(--dot, #bcdcff); }
-.legend-chip.c0 { --dot: #bcdcff; } .legend-chip.c1 { --dot: #ffd9b8; } .legend-chip.c2 { --dot: #bdecd2; }
-.legend-chip.c3 { --dot: #e1d3fb; } .legend-chip.c4 { --dot: #ffd0da; } .legend-chip.c5 { --dot: #fff0a6; }
-.cal-bar.open-l { margin-left: -1px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.cal-bar.open-r { margin-right: -1px; border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.cal-bar.c0 { background: #bcdcff; } .cal-bar.c1 { background: #ffd9b8; } .cal-bar.c2 { background: #bdecd2; }
-.cal-bar.c3 { background: #e1d3fb; } .cal-bar.c4 { background: #ffd0da; } .cal-bar.c5 { background: #fff0a6; }
+.legend-period { color: var(--muted); font-weight: 500; font-size: 12px; }
 .day-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.day-list li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 14px 16px; background: var(--bg); border-radius: var(--radius-sm); }
+.day-list li { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 14px 16px; background: var(--surface); border-radius: var(--radius-sm); }
 .day-list a { font-weight: 700; text-decoration: none; color: var(--text); }
 summary { cursor: pointer; font-size: 16px; }
 details[open] summary { margin-bottom: 4px; }
@@ -185,31 +197,24 @@ details[open] summary { margin-bottom: 4px; }
   background: transparent; border: 2px solid var(--muted); color: var(--on-accent); font-size: 16px; margin-top: 2px;
 }
 .check:hover { background: var(--accent-soft); border-color: var(--accent); }
-.check.on { background: var(--accent); border-color: var(--accent); }
-.badge.tag { background: var(--bg); color: var(--sub); }
+.check.on { background: var(--accent-strong); border-color: var(--accent-strong); }
+.badge.tag { background: var(--surface); color: var(--sub); }
 @media (max-width: 560px) { .task { flex-wrap: wrap; } }
-.cal-day { position: relative; }
-.due-pill {
-  position: absolute; top: 8px; right: 8px; min-width: 20px; height: 20px; line-height: 20px; padding: 0 6px;
-  border-radius: 999px; font-size: 11px; font-weight: 800; text-align: center;
-  background: var(--accent); color: var(--on-accent);
-}
-.due-pill.all-done { background: var(--bg); color: var(--ok); }
 .day-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.day-tasks li { display: flex; gap: 8px; align-items: baseline; padding: 10px 14px; background: var(--bg); border-radius: var(--radius-sm); font-weight: 600; }
+.day-tasks li { display: flex; gap: 8px; align-items: baseline; padding: 10px 14px; background: var(--surface); border-radius: var(--radius-sm); font-weight: 600; }
 .day-tasks li.done { color: var(--muted); text-decoration: line-through; }
 .day-tasks .mark { color: var(--ok); font-weight: 800; }
 h3.sub { font-size: 14px; color: var(--muted); margin: 16px 0 8px; font-weight: 700; }
 .btn-link {
   display: inline-block; padding: 8px 12px; font-size: 13px; font-weight: 700; border-radius: var(--radius-sm);
-  background: var(--accent); color: var(--on-accent); text-decoration: none;
+  background: var(--accent-strong); color: var(--on-accent); text-decoration: none;
 }
 .btn-link:hover { background: var(--accent-press); }
 td a { color: var(--accent); }
 label button.ghost { align-self: flex-start; padding: 6px 12px; font-size: 13px; }
 
 /* ── 회고 ── */
-.metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .metric {
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
   background: var(--card); color: var(--text); border-radius: var(--radius); padding: 18px; border: 2px solid transparent;
@@ -220,7 +225,7 @@ label button.ghost { align-self: flex-start; padding: 6px 12px; font-size: 13px;
 .metric-value { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; }
 .metric-hint { font-size: 12px; color: var(--accent); }
 .metric.bad .metric-value { color: var(--danger); }
-.note { background: var(--bg); border-radius: var(--radius-sm); padding: 14px 16px; }
+.note { background: var(--surface); border-radius: var(--radius-sm); padding: 14px 16px; }
 
 /* 내보내기 링크: 메뉴 오른쪽 끝 */
 .topbar nav .export-link { margin-left: 8px; background: var(--accent-soft); color: var(--accent); }
@@ -236,11 +241,6 @@ label button.ghost { align-self: flex-start; padding: 6px 12px; font-size: 13px;
   .container { padding-top: 8px; }
 }
 
-/* 모바일: 칸이 좁아 마감 개수 원이 날짜 숫자를 가리므로 작은 점으로 (개수는 날짜를 누르면 아래 패널에 표시) */
-@media (max-width: 640px) {
-  .due-pill { top: 7px; right: 4px; min-width: 9px; width: 9px; height: 9px; padding: 0; font-size: 0; line-height: 0; }
-  .due-pill.all-done { background: var(--ok); }
-}
 
 /* 모바일: 필터는 2열(검색만 전체 폭), 할 일 카드의 버튼은 제목 아래 줄로 */
 @media (max-width: 640px) {
@@ -274,3 +274,24 @@ label button.ghost { align-self: flex-start; padding: 6px 12px; font-size: 13px;
 .quick-add { display: grid; gap: 8px; }
 .quick-add .row { justify-content: space-between; }
 .inline-label { flex-direction: row; align-items: center; gap: 8px; color: var(--sub); }
+
+/* 모바일 달력: 칸이 좁아 할 일 이름·기간 글자는 숨기고, 마감 개수는 점으로 */
+@media (max-width: 640px) {
+  .cal-day { min-height: 58px; padding: 4px 3px 6px; gap: 2px; align-items: center; }
+  .cal-top { gap: 2px; }
+  .cal-chips { display: none; }
+  .cal-dots { justify-content: center; gap: 2px; }
+  .dot { width: 5px; height: 5px; }
+  .due-pill { min-width: 9px; width: 9px; height: 9px; padding: 0; font-size: 0; line-height: 0; }
+  .due-pill.all-done { background: var(--ok); }
+  .legend-period { display: none; }
+}
+
+/* 날짜 패널의 할 일: 아래 줄에 기록/수정/삭제 */
+.day-tasks li.editing { display: block; padding: 14px; }
+.day-tasks li { flex-wrap: nowrap; align-items: flex-start; }
+.day-tasks .check { margin-top: 2px; }
+.row-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.mini-btn { padding: 4px 10px; font-size: 12px; font-weight: 700; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.mini-btn:hover { background: var(--accent-soft); filter: brightness(1.15); }
+.mini-btn.danger { background: var(--danger-soft); color: var(--danger); }
