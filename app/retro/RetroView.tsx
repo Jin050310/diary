@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { api, dateTime, minutes } from "@/lib/format";
 import type { Plan, PlanInput, Retro, RetroNote, RetroTask } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
@@ -20,13 +21,34 @@ const METRIC_TITLE: Record<Metric, string> = {
 
 const addDays = (iso: string, n: number) => new Date(Date.parse(iso + "T00:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 const signed = (n: number) => (n > 0 ? `+${n}` : String(n));
+const isMetric = (value: string | null): value is Metric =>
+  value === "tasks" || value === "done" || value === "late" || value === "blocked" || value === "estimated" || value === "actual" || value === "diff";
 
+// 주소의 plan·from·to·metric 값(예: 진행 방향에서 숫자를 눌러 이동)으로 화면을 시작한다.
+// 주소가 바뀌면 key 가 바뀌어 화면이 새로 만들어지므로, 효과(useEffect) 안에서 상태를 맞춰 줄 필요가 없다.
 export default function RetroView() {
-  const [plan, setPlan] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
-  const [metric, setMetric] = useState<Metric | null>(null);
+  const search = useSearchParams();
+  const requested = search.get("metric");
+  return (
+    <RetroBody
+      key={search.toString()}
+      initial={{ plan: search.get("plan") ?? "", from: search.get("from") ?? "", to: search.get("to") ?? "", metric: isMetric(requested) ? requested : null }}
+    />
+  );
+}
+
+function RetroBody({ initial }: { initial: { plan: string; from: string; to: string; metric: Metric | null } }) {
+  const [plan, setPlan] = useState(initial.plan);
+  const [from, setFrom] = useState(initial.from);
+  const [to, setTo] = useState(initial.to);
+  const [metric, setMetric] = useState<Metric | null>(initial.metric);
   const evidenceRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!metric) return;
+    const frame = requestAnimationFrame(() => evidenceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return () => cancelAnimationFrame(frame);
+  }, [metric]);
 
   const params = new URLSearchParams();
   if (plan) params.set("plan", plan);

@@ -25,6 +25,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Link href="/">달력</Link>
             <Link href="/tasks">할 일</Link>
             <Link href="/records">실행 기록</Link>
+            <Link href="/direction">진행 방향</Link>
             <Link href="/retro">회고</Link>
             <a href="/api/export" download className="export-link">내보내기</a>
           </nav>
