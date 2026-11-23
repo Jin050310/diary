@@ -39,8 +39,8 @@ export async function GET(req: Request) {
 
     const rows = await sql`
       select t.*, p.title as plan_title,
-             (select count(*)::int from executions e where e.task_id = t.id) as exec_count,
-             (select coalesce(sum(e.actual_minutes), 0)::int from executions e where e.task_id = t.id) as actual_minutes
+             (select count(*)::int from executions e where e.task_id = t.id and e.deleted_at is null) as exec_count,
+             (select coalesce(sum(e.actual_minutes), 0)::int from executions e where e.task_id = t.id and e.deleted_at is null) as actual_minutes
       from tasks t join plans p on p.id = t.plan_id
       where t.user_id = ${user.id} and t.deleted_at is null
         ${plan ? sql`and t.plan_id = ${plan}` : sql``}

@@ -80,6 +80,24 @@ try {
     `동시에 3번 눌러도 완료 기록 ${total}건 (유효 ${active}건)`);
   const comps = (await call("/api/completions")).body.filter((c) => c.task_id === t.id);
   check("C22", comps.length === 1 && comps[0].canceled_at === null && comps[0].task_title === "__test__ exec", "완료 기록 목록에도 1건만 보임");
+
+  // 삭제: 행은 남고 삭제 표시만, 합계(할 일의 실제 시간·기록 수)와 회고 집계에서 빠진다
+  {
+    const list0 = (await call(`/api/executions?task=${t.id}`)).body;
+    const victim = list0[0];
+    const del = await call(`/api/executions/${victim.id}`, { method: "DELETE" });
+    check("삭제", del.status === 200, "실행 기록 삭제 → 200");
+    const list1 = (await call(`/api/executions?task=${t.id}`)).body;
+    check("삭제", list1.length === list0.length - 1 && !list1.some((x) => x.id === victim.id), "삭제한 기록은 목록에서 빠짐");
+    const [row] = await sql`select deleted_at from executions where id = ${victim.id}`;
+    check("삭제", !!row.deleted_at, "행은 남고 deleted_at 만 표시됨");
+    const tl = (await call(`/api/tasks?plan=${plan.id}`)).body.find((x) => x.id === t.id);
+    const sumLeft = list1.reduce((a, x) => a + x.actual_minutes, 0);
+    check("삭제", tl.exec_count === list1.length && tl.actual_minutes === sumLeft, "할 일 목록의 기록 수·실제 시간이 삭제를 반영함", `(${tl.exec_count}건, ${tl.actual_minutes}분)`);
+    const retro = (await call(`/api/retro?plan=${plan.id}`)).body;
+    check("삭제", !retro.executions.some((x) => x.id === victim.id), "회고의 근거 기록에서도 빠짐");
+    check("삭제", (await call(`/api/executions/${victim.id}`, { method: "DELETE" })).status === 404, "같은 기록을 또 삭제하면 404");
+  }
 } finally {
   if (tu) await dropTestUser(sql, tu.id);
   const rows = await sql`select id from tasks where title like '__test__%'`;

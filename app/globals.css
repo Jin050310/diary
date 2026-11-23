@@ -519,3 +519,30 @@ a.stat:hover .stat-value { color: var(--accent); }
 .today-pick-label { display: block; font-size: 13px; font-weight: 700; color: var(--sub); margin-bottom: 6px; }
 .today-pick .chips { gap: 8px; }
 .today-pick .chip { text-align: left; white-space: normal; line-height: 1.35; padding: 8px 14px; }
+
+/* ───── 실행 기록 목록: 무엇인지 한눈에 알아보도록 글꼴·구조 정리 ───── */
+.list-intro { margin: -4px 4px 14px; color: var(--sub); font-size: 15px; line-height: 1.65; }
+.list-intro b { color: var(--text); }
+.day-group-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; padding-bottom: 10px; margin-bottom: 8px; border-bottom: 2px solid var(--line); }
+.day-title { font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+.day-total { font-size: 14px; color: var(--sub); }
+.day-total b { color: var(--accent); font-size: 16px; font-weight: 800; }
+.rec-cols { display: grid; grid-template-columns: 96px 1fr 96px 56px; gap: 12px; padding: 0 14px 6px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.rec-cols span:nth-child(3) { text-align: right; }
+.rec-row { grid-template-columns: 96px 1fr 96px 56px; align-items: center; padding: 14px; }
+.rec-time { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.35; }
+.rec-time span { display: block; font-weight: 500; font-size: 13px; color: var(--muted); }
+.rec-main a.rec-task { font-size: 16px; font-weight: 700; color: var(--text); text-decoration: none; line-height: 1.45; }
+.rec-main a.rec-task:hover { text-decoration: underline; }
+.rec-plan { font-size: 13px; margin-top: 2px; }
+.rec-plan a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.rec-block { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; font-size: 14px; color: var(--text); background: var(--card); padding: 8px 12px; border-radius: 10px; line-height: 1.55; }
+.rec-block-label { flex-shrink: 0; font-size: 12px; font-weight: 800; color: var(--danger); background: var(--danger-soft); padding: 2px 8px; border-radius: 999px; line-height: 1.5; }
+.rec-min { font-size: 17px; font-weight: 800; color: var(--text); text-align: right; white-space: nowrap; }
+.rec-row .mini-btn { justify-self: end; }
+@media (max-width: 640px) {
+  .rec-cols { display: none; }
+  .rec-row { grid-template-columns: 1fr auto auto; }
+  .rec-time { grid-column: 1 / -1; display: flex; gap: 6px; align-items: baseline; }
+  .rec-time span { display: inline; }
+}

@@ -324,6 +324,11 @@
           "type": "bigint",
           "nullable": false,
           "description": "이 자료의 주인(로그인한 계정). 모든 조회·수정·삭제는 이 값이 로그인한 사용자와 같은 행만 대상으로 한다"
+        },
+        "deleted_at": {
+          "type": "timestamptz",
+          "nullable": true,
+          "description": "삭제한 시각. 비어 있지 않으면 삭제된 기록(화면·합계에서 빠지지만 행과 내보내기에는 남는다)"
         }
       },
       "primary_key": [

@@ -16,7 +16,7 @@ export async function GET(req: Request) {
       from executions e
       join tasks t on t.id = e.task_id
       join plans p on p.id = t.plan_id
-      where e.user_id = ${user.id}
+      where e.user_id = ${user.id} and e.deleted_at is null
         ${task ? sql`and e.task_id = ${task}` : sql``}
         ${plan ? sql`and t.plan_id = ${plan}` : sql``}
       order by e.started_at desc, e.id desc`;

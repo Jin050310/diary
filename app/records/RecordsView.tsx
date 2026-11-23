@@ -111,6 +111,25 @@ export default function RecordsView() {
     }
   }
 
+  // 기록 삭제: 서버가 삭제 표시만 하므로 합계에서는 빠지고, 내보내기 파일에는 '삭제됨'으로 남는다.
+  async function removeExec(e: Execution) {
+    const when = `${mdKo(kstDay(e.started_at))} ${kstHm(e.started_at)}~${kstHm(e.ended_at)}`;
+    if (!window.confirm(`이 기록을 삭제할까요?
+
+${e.task_title}
+${when} · ${shortMin(e.actual_minutes)}
+
+삭제하면 합계에서 빠져요. (내보내기 파일에는 '삭제됨'으로 남아요)`)) return;
+    setError("");
+    try {
+      await api(`/api/executions/${e.id}`, { method: "DELETE" });
+      setSaved("기록을 삭제했어요.");
+      reloadExecs(); reloadTasks();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "삭제하지 못했어요");
+    }
+  }
+
   // 날짜별로 묶어서 보여 준다 (최근 날짜 먼저)
   const groups = new Map<string, Execution[]>();
   for (const e of execs ?? []) { const k = kstDay(e.started_at); groups.set(k, [...(groups.get(k) ?? []), e]); }
@@ -223,27 +242,33 @@ export default function RecordsView() {
         </div>
       </section>
 
-      <div className="section-head"><h2>기록 목록 <span className="muted">({execs?.length ?? 0}건)</span></h2></div>
+      <div className="section-head"><h2>내가 남긴 기록 <span className="muted">({execs?.length ?? 0}건)</span></h2></div>
+      <p className="list-intro">
+        지금까지 <b>실제로 한 일</b>을 날짜별로 모아 둔 목록이에요. 위에서 저장한 기록이 여기에 쌓여요.
+        {execs && execs.length > 0 && <> 전체 합계 <b>{shortMin(execs.reduce((s, e) => s + e.actual_minutes, 0))}</b>.</>} 잘못 남긴 기록은 오른쪽 <b>삭제</b>로 지울 수 있어요.
+      </p>
       {execError && <p className="error">{execError}</p>}
-      {execs?.length === 0 && <section className="card"><p className="muted empty">아직 실행 기록이 없어요. 위에서 방금 한 일을 하나 남겨 보세요.</p></section>}
+      {execs?.length === 0 && <section className="card"><p className="muted empty">아직 남긴 기록이 없어요. 위에서 방금 한 일을 하나 남겨 보세요.</p></section>}
       {days.map((day) => {
         const list = (groups.get(day) ?? []).sort((a, b) => b.started_at.localeCompare(a.started_at));
         return (
           <section key={day} className="card day-group">
             <div className="day-group-head">
-              <strong>{mdKo(day)}{day === today && <span className="today-pill" style={{ marginLeft: 8 }}>오늘</span>}</strong>
-              <span className="muted">{list.length}건 · {shortMin(list.reduce((s, e) => s + e.actual_minutes, 0))}</span>
+              <strong className="day-title">{mdKo(day)}{day === today && <span className="today-pill" style={{ marginLeft: 8 }}>오늘</span>}</strong>
+              <span className="day-total">이날 합계 <b>{shortMin(list.reduce((s, e) => s + e.actual_minutes, 0))}</b> · {list.length}건</span>
             </div>
+            <div className="rec-cols" aria-hidden="true"><span>시각</span><span>한 일</span><span>걸린 시간</span><span /></div>
             <ul className="rec-list">
               {list.map((e) => (
                 <li key={e.id} className="rec-row">
-                  <div className="rec-time">{kstHm(e.started_at)}–{kstHm(e.ended_at)}</div>
+                  <div className="rec-time">{kstHm(e.started_at)}<span>~ {kstHm(e.ended_at)}</span></div>
                   <div className="rec-main">
-                    <Link href={`/records?task=${e.task_id}`} onClick={() => { setTaskId(String(e.task_id)); setSaved(""); }}>{e.task_title}</Link>
-                    <span className="muted"> · <Link href={`/plans/${e.plan_id}`}>{e.plan_title}</Link></span>
-                    {e.blocker && <div className="rec-block">막힌 점: {e.blocker}</div>}
+                    <Link className="rec-task" href={`/records?task=${e.task_id}`} onClick={() => { setTaskId(String(e.task_id)); setSaved(""); }}>{e.task_title}</Link>
+                    <div className="rec-plan"><Link href={`/plans/${e.plan_id}`}>{e.plan_title}</Link></div>
+                    {e.blocker && <div className="rec-block"><span className="rec-block-label">막힌 점</span><span>{e.blocker}</span></div>}
                   </div>
                   <div className="rec-min">{shortMin(e.actual_minutes)}</div>
+                  <button type="button" className="mini-btn danger" aria-label={`${e.task_title} 기록 삭제`} onClick={() => removeExec(e)}>삭제</button>
                 </li>
               ))}
             </ul>

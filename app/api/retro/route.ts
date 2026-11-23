@@ -35,7 +35,7 @@ export async function GET(req: Request) {
       left join lateral (
         select sum(e.actual_minutes) as actual, count(*) as cnt,
                bool_or(e.blocker is not null and btrim(e.blocker) <> '') as blocked
-        from executions e where e.task_id = t.id
+        from executions e where e.task_id = t.id and e.deleted_at is null
       ) x on true
       where t.user_id = ${user.id} and t.deleted_at is null
         ${plan ? sql`and t.plan_id = ${plan}` : sql``}
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
       ? await sql`
           select e.id, e.task_id, t.title as task_title, e.started_at, e.ended_at, e.actual_minutes, e.blocker
           from executions e join tasks t on t.id = e.task_id
-          where e.user_id = ${user.id} and e.task_id in ${sql(ids)}
+          where e.user_id = ${user.id} and e.deleted_at is null and e.task_id in ${sql(ids)}
           order by e.started_at desc, e.id desc`
       : [];
 

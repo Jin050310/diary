@@ -216,6 +216,7 @@ try {
     ["쓰기: 남의 할 일에 실행 기록 추가", "POST", "/api/executions", { task_id: them.task, started_at: "2026-11-24T10:00:00+09:00", ended_at: "2026-11-24T10:10:00+09:00" }],
     ["쓰기: 남의 계획에 할 일 추가", "POST", "/api/tasks", { plan_id: them.plan, title: "끼워넣기", due_date: null, priority: 2, tags: [], estimated_minutes: 1 }],
     ["쓰기: 남의 계획에 회고 추가", "POST", "/api/retro-notes", { plan_id: them.plan, improvement: "끼워넣기" }],
+    ["삭제: 남의 실행 기록", "DELETE", `/api/executions/${them.exec}`],
     ["쓰기: 남의 개선점으로 다음 계획 생성", "POST", `/api/retro-notes/${them.note}/next-plan`, { title: "끼워넣기", start_date: "2026-12-01", end_date: "2026-12-02", priority: 2, success_criteria: "x", estimated_minutes: 0 }],
   ];
 
@@ -231,6 +232,25 @@ try {
     ok(JSON.stringify(beforeN) === JSON.stringify(afterN), `거절 앞뒤로 ${to} 의 자료 건수·제목이 그대로`, `(${JSON.stringify({ ...beforeN, task_titles: undefined })})`);
   }
   ok(JSON.stringify(await counts(nameA)) === JSON.stringify(ca) && JSON.stringify(await counts(nameB)) === JSON.stringify(cb), "양방향 시도가 끝난 뒤에도 A·B 의 건수와 제목이 처음과 같음(반대편에 새로 생긴 자료 없음)");
+
+  console.log("\n  ── 실행 기록 삭제: 내 기록은 지워지고(삭제 표시), 남의 기록은 그대로 ──");
+  {
+    const listA0 = await A.req("GET", "/api/executions");
+    r = await A.req("DELETE", `/api/executions/${created.A.exec}`);
+    show("A 가 자기 실행 기록 삭제", "DELETE", `/api/executions/${created.A.exec}`, r, r.json);
+    ok(r.status === 200, "내 실행 기록 삭제 → 200");
+    const again = await A.req("DELETE", `/api/executions/${created.A.exec}`);
+    ok(again.status === 404, "이미 삭제한 기록을 다시 삭제 → 404");
+    const listA1 = await A.req("GET", "/api/executions");
+    ok(listA0.json.length === 1 && listA1.json.length === 0, "삭제한 기록은 목록에서 빠짐", `(${listA0.json.length}건 → ${listA1.json.length}건)`);
+    const exp = await A.req("GET", "/api/export");
+    const row = exp.json.data.executions.find((x) => x.id === created.A.exec);
+    ok(!!row && !!row.deleted_at, "내보내기 파일에는 deleted_at 과 함께 행이 남음", `(deleted_at=${row?.deleted_at ? "있음" : "없음"})`);
+    const [dbrow] = await sql`select deleted_at from executions where id = ${created.A.exec}`;
+    ok(!!dbrow?.deleted_at, "DB 에서 행은 지워지지 않고 삭제 시각만 표시됨");
+    const bList = await B.req("GET", "/api/executions");
+    ok(bList.json.length === 1, "B 의 기록은 그대로 1건");
+  }
 
   console.log("\n  ── 주소·헤더·본문에 다른 계정을 적어 보냄 (A 로 로그인) ──");
   // DB 의 bigint 는 문자열로 오므로 숫자로 바꿔 API 응답(숫자)과 비교한다

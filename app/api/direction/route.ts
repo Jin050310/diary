@@ -19,7 +19,7 @@ async function load(tx: Tx, planId: number, userId: number) {
   const execRows = tasks.length
     ? await tx<(Omit<DExec, "started_at"> & { started_at: Date })[]>`
         select e.id, e.task_id, e.started_at, e.actual_minutes, e.blocker
-        from executions e where e.task_id in ${tx(tasks.map((t) => t.id))}
+        from executions e where e.deleted_at is null and e.task_id in ${tx(tasks.map((t) => t.id))}
         order by e.started_at, e.id`
     : [];
   const execs: DExec[] = execRows.map((r) => ({ ...r, started_at: new Date(r.started_at).toISOString() }));

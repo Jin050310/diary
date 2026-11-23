@@ -170,3 +170,7 @@ create index if not exists idx_retro_user       on retro_notes(user_id);
 
 alter table users    enable row level security;
 alter table sessions enable row level security;
+
+-- 실행 기록 삭제: 행을 지우지 않고 삭제 시각만 표시한다. (할 일 삭제와 같은 방식)
+-- 화면·합계(할 일 시간, 진행 방향, 회고)에서는 빠지지만, 내보내기 파일에는 deleted_at 과 함께 남아 삭제한 사실을 확인할 수 있다.
+alter table executions add column if not exists deleted_at timestamptz;
