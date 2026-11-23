@@ -174,3 +174,29 @@ alter table sessions enable row level security;
 -- 실행 기록 삭제: 행을 지우지 않고 삭제 시각만 표시한다. (할 일 삭제와 같은 방식)
 -- 화면·합계(할 일 시간, 진행 방향, 회고)에서는 빠지지만, 내보내기 파일에는 deleted_at 과 함께 남아 삭제한 사실을 확인할 수 있다.
 alter table executions add column if not exists deleted_at timestamptz;
+
+-- ───────────── 과제 7 카드 5: 5일 사용 · 계획 규칙 변경 기록 ─────────────
+-- 5일 사용을 시작한 날(Asia/Seoul 날짜). 이 날부터 5일을 "5일 요약"으로 계산한다.
+alter table users add column if not exists five_day_start date;
+
+-- 계획 규칙을 바꾼 기록. 바꾼 시각은 서버가 now() 로 찍고(사용자가 정할 수 없음), 기록은 고치거나 지울 수 없다. (계정을 지울 때만 함께 지워짐)
+create table if not exists rule_changes (
+  id          bigserial primary key,
+  user_id     bigint      not null references users(id) on delete cascade,
+  changed_at  timestamptz not null default now(),
+  rule_name   text        not null check (char_length(rule_name) between 1 and 200),
+  old_value   text        not null check (char_length(old_value) between 1 and 200),
+  new_value   text        not null check (char_length(new_value) between 1 and 200),
+  reason      text        not null check (char_length(reason) between 1 and 1000)
+);
+create index if not exists idx_rule_changes_user on rule_changes(user_id);
+alter table rule_changes enable row level security;
+
+create or replace function rule_changes_readonly() returns trigger as $$
+begin
+  raise exception 'rule_changes is append-only';
+end;
+$$ language plpgsql;
+drop trigger if exists trg_rule_changes_readonly on rule_changes;
+create trigger trg_rule_changes_readonly before update on rule_changes
+  for each row execute function rule_changes_readonly();

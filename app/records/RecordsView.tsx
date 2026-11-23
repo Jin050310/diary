@@ -7,6 +7,7 @@ import { toggleTask } from "@/lib/taskActions";
 import type { Completion, Execution, Task } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
 import { Chips, PageHead } from "../ui";
+import FiveDaySummary from "./FiveDaySummary";
 
 // 직접 입력하는 시각(예: 2026-11-19T14:30)은 한국 시간으로 보고, 시간대(+09:00)를 붙여 서버로 보낸다.
 const toIso = (local: string) => `${local}:00+09:00`;
@@ -241,6 +242,8 @@ ${when} · ${shortMin(e.actual_minutes)}
           )}
         </div>
       </section>
+
+      <FiveDaySummary refreshKey={`${execs?.length ?? 0}-${execs?.[0]?.id ?? 0}`} />
 
       <div className="section-head"><h2>내가 남긴 기록 <span className="muted">({execs?.length ?? 0}건)</span></h2></div>
       <p className="list-intro">

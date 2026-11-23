@@ -12,7 +12,7 @@ const BASE = process.env.BASE ?? "http://localhost:3000";
 const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 2, onnotice: () => {} });
 
 const tag = randomBytes(3).toString("hex");
-const nameA = `__t7_a_${tag}`, nameB = `__t7_b_${tag}`;
+const nameA = `__t7_a_${tag}`, nameB = `__t7_b_${tag}`, nameC = `__t7_c_${tag}`; // C 는 계정 삭제 점검용
 const pwShared = randomBytes(12).toString("base64url") + "!1"; // 두 계정이 같은 비밀번호를 쓰도록 (저장값이 다른지 보려고). 출력하지 않는다.
 const pwNew = randomBytes(12).toString("base64url") + "!2";
 
@@ -65,7 +65,7 @@ async function counts(userName) {
 }
 
 async function cleanup() {
-  const ids = (await sql`select id from users where username in (${nameA}, ${nameB})`).map((r) => r.id);
+  const ids = (await sql`select id from users where username in (${nameA}, ${nameB}, ${nameC})`).map((r) => r.id);
   if (!ids.length) return;
   await sql`update plans set source_retro_note_id = null where user_id in ${sql(ids)}`;
   await sql`delete from executions where user_id in ${sql(ids)}`;
@@ -232,6 +232,53 @@ try {
     ok(JSON.stringify(beforeN) === JSON.stringify(afterN), `거절 앞뒤로 ${to} 의 자료 건수·제목이 그대로`, `(${JSON.stringify({ ...beforeN, task_titles: undefined })})`);
   }
   ok(JSON.stringify(await counts(nameA)) === JSON.stringify(ca) && JSON.stringify(await counts(nameB)) === JSON.stringify(cb), "양방향 시도가 끝난 뒤에도 A·B 의 건수와 제목이 처음과 같음(반대편에 새로 생긴 자료 없음)");
+
+  console.log("\n  ── 계정 삭제: 내 계정과 자료는 모두 지워지고, 다른 계정은 그대로 (T07-C134) ──");
+  {
+    const C = client();
+    const sc = await C.req("POST", "/api/auth/signup", { username: nameC, password: pwShared });
+    ok(sc.status === 201, "삭제 점검용 계정 C 가입");
+    const cookieC = C.cookie;
+    await seed(C, "C", "C계정");
+    await C.req("POST", "/api/summary/start", { date: "2026-11-23" });
+    await C.req("POST", "/api/rule-changes", { rule_name: "점검용 규칙", old_value: "60분", new_value: "90분", reason: "점검" });
+    const [{ id: idC }] = await sql`select id from users where username = ${nameC}`;
+    const rowsOf = async (uid) => (await sql`
+      select (select count(*)::int from plans where user_id = ${uid}) plans, (select count(*)::int from tasks where user_id = ${uid}) tasks,
+             (select count(*)::int from executions where user_id = ${uid}) executions, (select count(*)::int from completions where user_id = ${uid}) completions,
+             (select count(*)::int from retro_notes where user_id = ${uid}) retro_notes, (select count(*)::int from rule_changes where user_id = ${uid}) rule_changes,
+             (select count(*)::int from sessions where user_id = ${uid}) sessions, (select count(*)::int from users where id = ${uid}) users`)[0];
+    const before = await rowsOf(idC);
+    console.log(`    지우기 전 C 의 자료: ${JSON.stringify(before)}`);
+    ok(before.plans === 1 && before.tasks === 1 && before.executions === 1 && before.rule_changes === 1 && before.users === 1, "C 에 계획·할 일·실행 기록·규칙 변경 기록이 들어 있음");
+
+    r = await anon.req("DELETE", "/api/auth/account", { password: pwShared, confirm_username: nameC });
+    show("로그인 없이 계정 삭제", "DELETE", "/api/auth/account", r, r.json);
+    ok(r.status === 401, "로그인 없이는 계정 삭제 거절(401)");
+    r = await C.req("DELETE", "/api/auth/account", { password: pwNew, confirm_username: nameC });
+    show("비밀번호가 틀린 계정 삭제", "DELETE", "/api/auth/account", r, r.json);
+    ok(r.status === 400 && (await rowsOf(idC)).users === 1, "틀린 비밀번호로는 삭제 거절(400), 계정은 그대로");
+    r = await C.req("DELETE", "/api/auth/account", { password: pwShared, confirm_username: nameA });
+    show("아이디 확인이 틀린 계정 삭제", "DELETE", "/api/auth/account", r, r.json);
+    ok(r.status === 400 && (await rowsOf(idC)).users === 1, "아이디를 잘못 확인하면 삭제 거절(400), 계정은 그대로");
+    r = await A.req("DELETE", "/api/auth/account", { password: pwShared, confirm_username: nameC });
+    ok(r.status === 400 && (await rowsOf(idC)).users === 1, "A 가 C 의 아이디를 적어 보내도 C 는 지워지지 않음 (A 자신의 확인에 실패)");
+
+    const caBefore = await counts(nameA), cbBefore = await counts(nameB);
+    r = await C.req("DELETE", "/api/auth/account", { password: pwShared, confirm_username: nameC });
+    show("C 가 올바르게 자기 계정 삭제", "DELETE", "/api/auth/account", r, r.json);
+    ok(r.status === 200 && r.json.deleted.plans === 1 && r.json.deleted.tasks === 1 && r.json.deleted.executions === 1, "올바른 비밀번호·아이디로 삭제 → 200, 지운 자료 건수가 응답에 나옴");
+    const after = await rowsOf(idC);
+    console.log(`    지운 뒤 C 의 자료: ${JSON.stringify(after)}`);
+    ok(Object.values(after).every((n) => n === 0), "계정과 함께 모든 자료(계획·할 일·기록·완료·회고·규칙 변경·세션)가 지워짐");
+    const stale = client(); stale.cookie = cookieC;
+    r = await stale.req("GET", "/api/auth/me");
+    show("지운 계정의 옛 쿠키", "GET", "/api/auth/me", r, r.json);
+    ok(r.status === 401, "지운 계정의 옛 로그인 쿠키는 더 통하지 않음(401)");
+    r = await anon.req("POST", "/api/auth/login", { username: nameC, password: pwShared });
+    ok(r.status === 401, "지운 계정으로는 로그인되지 않음(401)");
+    ok(JSON.stringify(await counts(nameA)) === JSON.stringify(caBefore) && JSON.stringify(await counts(nameB)) === JSON.stringify(cbBefore), "다른 계정 A·B 의 자료는 그대로");
+  }
 
   console.log("\n  ── 실행 기록 삭제: 내 기록은 지워지고(삭제 표시), 남의 기록은 그대로 ──");
   {

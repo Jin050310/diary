@@ -477,6 +477,11 @@
           "type": "timestamptz",
           "nullable": false,
           "default": "now()"
+        },
+        "five_day_start": {
+          "type": "date",
+          "nullable": true,
+          "description": "5일 사용을 시작한 날(Asia/Seoul). 이 날부터 5일을 5일 요약으로 계산한다"
         }
       },
       "primary_key": [
@@ -535,6 +540,61 @@
           ]
         }
       ]
+    },
+    "rule_changes": {
+      "description": "계획 규칙을 바꾼 기록. 바꾼 시각은 서버가 찍고(사용자가 정할 수 없음), 기록은 고치거나 지울 수 없다(계정을 지울 때만 함께 지워짐).",
+      "columns": {
+        "id": {
+          "type": "bigint",
+          "nullable": false,
+          "default": "자동 증가"
+        },
+        "user_id": {
+          "type": "bigint",
+          "nullable": false,
+          "description": "기록의 주인"
+        },
+        "changed_at": {
+          "type": "timestamptz",
+          "nullable": false,
+          "default": "now()",
+          "description": "바꾼 시각(서버가 기록)"
+        },
+        "rule_name": {
+          "type": "text",
+          "nullable": false,
+          "check": "1~200자",
+          "description": "바꾼 규칙"
+        },
+        "old_value": {
+          "type": "text",
+          "nullable": false,
+          "check": "1~200자",
+          "description": "이전 값"
+        },
+        "new_value": {
+          "type": "text",
+          "nullable": false,
+          "check": "1~200자",
+          "description": "새 값"
+        },
+        "reason": {
+          "type": "text",
+          "nullable": false,
+          "check": "1~1000자",
+          "description": "바꾼 이유"
+        }
+      },
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column": "user_id",
+          "references": "users.id",
+          "on_delete": "CASCADE"
+        }
+      ]
     }
   },
   "relations": [
@@ -545,7 +605,8 @@
     "plans 1 ── N retro_notes (계획의 회고 개선점)",
     "retro_notes 1 ── 0..1 plans (개선점 → 다음 계획, plans.source_retro_note_id)",
     "users 1 ── N plans·tasks·executions·completions·retro_notes (자료의 주인, user_id)",
-    "users 1 ── N sessions (로그인 세션)"
+    "users 1 ── N sessions (로그인 세션)",
+    "users 1 ── N rule_changes (계획 규칙 변경 기록)"
   ],
   "retro_definitions": {
     "plan_count": "대상 계획에 속한, 삭제되지 않은(deleted_at is null) 할 일 수",
@@ -559,6 +620,6 @@
   "export": {
     "endpoint": "GET /api/export",
     "format": "JSON 파일 하나 (pds-diary-export-YYYY-MM-DD.json)",
-    "contains": "로그인한 본인의 위 6개 테이블 행(삭제 표시된 할 일·취소된 완료 포함, 각 행의 user_id 포함), schema 이름, 내보낸 시각, 시간대·단위 규칙. users·sessions(비밀번호 해시·토큰 해시)는 내보내지 않는다"
+    "contains": "로그인한 본인의 위 6개 테이블(규칙 변경 기록 rule_changes 는 5일 요약 화면에서 확인) 행(삭제 표시된 할 일·취소된 완료 포함, 각 행의 user_id 포함), schema 이름, 내보낸 시각, 시간대·단위 규칙. users·sessions(비밀번호 해시·토큰 해시)는 내보내지 않는다"
   }
 }

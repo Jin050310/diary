@@ -37,11 +37,13 @@
 4. **자료 조회** 화면(`app/*/…View.tsx`) → `lib/format.ts` `api()` → `proxy.ts`(쿠키 없으면 로그인 화면) → `app/api/…/route.ts` → `lib/http.ts:8` `handle()` → `lib/auth.ts:51` `currentUser`(쿠키 토큰 → SHA-256 → `sessions` 조회, 만료 전만 인정) → 쿼리에 `user_id = ${user.id}` 조건.
 5. **남의 자료 거절:** `where id = ${id} and user_id = ${user.id}` 로 조회·수정·삭제가 **한 문장**에서 소유자까지 같이 확인되고(확인 후 쓰기가 아니라 확인과 쓰기가 한 쿼리), 행이 없으면 `NotFound`→**404**. 남의 계획·할 일을 참조하는 쓰기도 먼저 주인을 확인해 404 (`tasks/route.ts:64`, `executions/route.ts:33`, `retro-notes/route.ts:27`, `retro-notes/[id]/next-plan/route.ts:13`). 목록 쿼리의 소유자 조건: `plans/route.ts:14`, `tasks/route.ts:45`, `executions/route.ts:19`, `completions/route.ts:13`, `retro-notes/route.ts:14`, `retro/route.ts:40·51`, `direction/route.ts:16·47`, 내보내기 `export/route.ts:13~20`.
 6. **6번 자료 이관:** `scripts/claim-data.mjs` 가 주인 없던 행을 내 계정으로 옮기고 `user_id` 를 NOT NULL 로 바꾼다.
-7. **고친 6번 화면:** "로그인이 없어 누구나 볼 수 있다"는 안내(`app/layout.tsx`)를 없애고, 메뉴에 계정 이름·로그아웃(`app/TopBar.tsx`)을 넣었다. API 가 401 을 주면 화면이 로그인으로 보낸다(`lib/format.ts:30`).
+7. **계정 삭제(T07-C134):** `app/api/auth/account/route.ts` — 로그인한 상태에서 비밀번호(`verifyLogin`)와 아이디를 다시 확인해야 하고, 자료를 외래 키 순서대로 **한 트랜잭션**에서 지운다(`plans·tasks·executions·completions·retro_notes`, `plan_revisions·sessions·rule_changes` 는 `ON DELETE CASCADE`). 화면은 `app/account/AccountView.tsx` 에서 "계정을 지우면 내 자료도 함께 지워져요 · 되돌릴 수 없어요 · 먼저 내보내기"를 적어 둔다.
+8. **5일 요약·규칙 변경 기록:** 계산 `lib/summaryCalc.ts`(순수 함수, `scripts/test-summary-calc.mjs` 가 손으로 구한 값과 대조), API `app/api/summary/route.ts`, 규칙 변경 기록 `app/api/rule-changes/route.ts`(바꾼 시각은 DB `now()`, `rule_changes` 는 DB 트리거로 수정 불가), 화면 `app/records/FiveDaySummary.tsx`.
+9. **고친 6번 화면:** "로그인이 없어 누구나 볼 수 있다"는 안내(`app/layout.tsx`)를 없애고, 메뉴에 계정 이름·로그아웃(`app/TopBar.tsx`)을 넣었다. API 가 401 을 주면 화면이 로그인으로 보낸다(`lib/format.ts:30`).
 
 ## ④ 안 열리는 것을 확인한 기록
 
-`node scripts/test-auth.mjs` 의 **실제 출력**입니다(통과 93 / 실패 0, 개발 서버와 정식 빌드 `npm run start` 양쪽에서 실행). 전체 출력은 [`docs/evidence/test-auth-output.txt`](docs/evidence/test-auth-output.txt). 같은 항목에서 **성공한 요청**과 **거절된 요청**을 나란히 적습니다. (이 실행에서 A 계정 id 33, B 계정 id 34 / A 의 계획 9·할 일 42, B 의 계획 10·할 일 43)
+`node scripts/test-auth.mjs` 의 **실제 출력**입니다(개발 서버·정식 빌드·실제 배포 주소 모두에서 실행). 아래 1)~5) 인용은 통과 93개 실행([`test-auth-output.txt`](docs/evidence/test-auth-output.txt))에서 가져온 것이고, 실행 기록 삭제·**계정 삭제**를 더한 **최종 전체 출력(통과 110 / 실패 0)** 은 [`test-auth-output-final.txt`](docs/evidence/test-auth-output-final.txt), 5일 요약·규칙 변경 기록 점검은 [`test-summary-output.txt`](docs/evidence/test-summary-output.txt). 같은 항목에서 **성공한 요청**과 **거절된 요청**을 나란히 적습니다. (이 실행에서 A 계정 id 33, B 계정 id 34 / A 의 계획 9·할 일 42, B 의 계획 10·할 일 43)
 
 **1) 로그인 없이 자료 요청 — 거절**
 ```
@@ -100,6 +102,19 @@ POST /api/plans {"user_id":34, …} + 헤더 X-User-Id: 34         → 201 {"id"
 POST /api/plans (헤더 Origin: https://evil.example)            → 403 {"error":"허용되지 않은 요청입니다."}
 ```
 
+**6) 계정 삭제 — 올바르게 확인한 본인만 가능, 지우면 자료도 함께 (T07-C134, 최종 출력에서)**
+```
+지우기 전 C 의 자료: {"plans":1,"tasks":1,"executions":1,"completions":1,"retro_notes":1,"rule_changes":1,"sessions":1,"users":1}
+거절   DELETE /api/auth/account (로그인 없음)             → 401 {"error":"로그인이 필요합니다."}
+거절   DELETE /api/auth/account (비밀번호 틀림)           → 400 {"error":"비밀번호가 올바르지 않습니다."}
+거절   DELETE /api/auth/account (아이디 확인 틀림)        → 400 {"error":"확인을 위해 내 아이디를 정확히 입력하세요."}
+거절   A 가 C 의 아이디를 적어 DELETE                     → 400 (A 자신의 비밀번호·아이디 확인에 실패, C 는 그대로)
+성공   DELETE /api/auth/account (올바른 비밀번호·아이디)   → 200 {"ok":true,"deleted":{"plans":1,"tasks":1,"executions":1,"completions":1,"retro_notes":1}}
+지운 뒤 C 의 자료: {"plans":0,"tasks":0,"executions":0,"completions":0,"retro_notes":0,"rule_changes":0,"sessions":0,"users":0}
+거절   GET /api/auth/me (지운 계정의 옛 쿠키)              → 401 {"error":"로그인이 필요합니다."}
+```
+다른 계정 A·B 의 자료는 그대로이고, 지운 계정으로는 로그인되지 않는다(401). 화면(`내 계정`)에는 "계정을 지우면 내 자료도 함께 지워져요 · 되돌릴 수 없어요 · 먼저 내보내기"가 적혀 있다.
+
 **가입·로그인 안내 문구 (카드 1)**
 ```
 거절   POST /api/auth/signup (이미 있는 아이디)            → 409 {"error":"이미 사용 중인 아이디입니다."}
@@ -130,9 +145,12 @@ B: $argon2id$v=19$m=19456,t=2,p=1$VpS2Cp/83i3x2kKNdHQ9Vw$ph/vU6...생략
 
 1. **무차별 대입(brute force) 로그인 시도를 막지 않았다.** 로그인 실패 횟수 제한·잠금·지연이 없어서, 공격자가 한 계정에 비밀번호를 계속 시도할 수 있다. 비밀번호는 8자 이상만 검사해서 약한 비밀번호도 가입된다. (대응 방향: IP·계정별 실패 횟수 제한, 일정 횟수 후 지연)
 2. **가입 응답으로 아이디 존재 여부를 알아낼 수 있다.** 로그인은 "아이디 또는 비밀번호"로 같은 응답을 주지만, 가입은 "이미 사용 중인 아이디입니다"(409)를 주므로 어떤 아이디가 있는지 확인할 수 있다.
-3. **비밀번호 분실 복구·이메일 인증이 없다.** 비밀번호를 잊으면 복구할 방법이 없고(DB 에서 직접 처리해야 함), 가입 시 본인 확인도 없다.
+3. **비밀번호 분실 복구·이메일 인증·다중 요소 인증(MFA)이 없다.** 비밀번호를 잊으면 복구할 방법이 없고(DB 에서 직접 처리해야 함), 가입 시 본인 확인도 없으며, 비밀번호 하나만 뚫리면 계정이 열린다. (시간이 부족해서가 아니라 이번 범위로 잡지 않았다)
 4. **CSRF 전용 토큰이 없다.** `SameSite=Lax` 쿠키와 `Origin` 검사(`proxy.ts`)로 막지만, 별도의 CSRF 토큰은 두지 않았다. `Origin` 헤더를 아예 보내지 않는 쓰기 요청은 쿠키 속성에만 기댄다.
 5. **세션 관리가 거칠다.** 유효 기간 7일 고정(활동해도 연장 안 됨), "다른 기기 목록·개별 로그아웃" 화면이 없고(비밀번호 변경 시 전체 무효화만 가능), 만료된 `sessions` 행을 지우는 정리 작업이 없어 계속 쌓인다.
 6. **앱 밖에서의 접근은 막지 못한다.** 접근 제어는 앱 코드의 `user_id` 조건이다. DB 접속 정보를 가진 사람(나 자신, 호스팅 관리자)은 모든 계정의 자료를 볼 수 있고, DB 에서 행 단위 보안(RLS 정책)으로 한 번 더 막는 것은 하지 않았다(RLS 는 켜 두었지만 서버 접속 계정은 우회한다).
 7. **배포 환경의 로그는 확인하지 못했다.** 내 컴퓨터의 서버 로그에서 비밀번호·토큰이 없음을 확인했지만, Vercel 쪽 로그·모니터링에 남는 값은 점검하지 않았다. 또한 점검은 개발 DB 에 직접 임시 계정을 만들어 실행한다.
-8. **역할·관리자 개념이 없다.** 모든 계정이 같은 권한이고, 계정 삭제(탈퇴) 기능도 없다.
+8. **감사 로그가 없다.** 누가 언제 로그인했고, 실패했고, 어떤 자료에 접근했는지 남기는 기록이 없어서, 침입이나 오용이 있어도 나중에 되짚을 수 없다. (`sessions.created_at` 에 로그인 시각만 남는다)
+9. **실행 기록의 날짜는 사용자가 입력하는 값이라 과거 날짜로 넣을 수 있다.** 서버가 자동으로 찍는 입력 시각(`created_at`)과 비교하면 알 수 있고 내보내기 파일에도 들어 있지만, 앱이 막지는 않는다. 규칙 변경 기록(`rule_changes`)은 시각을 서버가 찍고 수정할 수 없게 했다.
+10. **계정 삭제는 되돌릴 수 없고, 이미 밖으로 나간 사본은 못 지운다.** 지우기 전에 내려받은 내보내기 파일, 호스팅·DB 서비스의 백업과 로그에 남은 값은 앱이 지울 수 없다. 삭제 확인은 비밀번호와 아이디 입력뿐이고 이메일 확인이 없다.
+11. **역할·관리자 개념이 없다.** 모든 계정이 같은 권한이다.
