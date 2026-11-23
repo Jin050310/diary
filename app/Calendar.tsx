@@ -6,6 +6,7 @@ import type { Plan, Task } from "@/lib/types";
 const DAY_MS = 86400000;
 const toIso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 export const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+const WEEKDAYS_EN = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"]; // 달력 머리줄은 잡지처럼 영문 대문자
 const SHOW_CHIPS = 2; // 칸 안에 이름을 보여 줄 할 일 수 (넓은 화면에서만 보임)
 
 export function monthLabel(y: number, m: number) {
@@ -66,8 +67,8 @@ export default function Calendar({
       )}
       <div className="cal" role="grid" aria-label={monthLabel(year, month)}>
         <div className="cal-head" role="row">
-          {WEEKDAYS.map((d, i) => (
-            <div key={d} role="columnheader" className={i === 0 ? "sun" : i === 6 ? "sat" : ""}>{d}</div>
+          {WEEKDAYS_EN.map((d, i) => (
+            <div key={d} role="columnheader" aria-label={WEEKDAYS[i]} className={i === 0 ? "sun" : i === 6 ? "sat" : ""}>{d}</div>
           ))}
         </div>
         {weeksOf(year, month).map((days) => (
@@ -90,7 +91,7 @@ export default function Calendar({
                   </span>
                   <span className="cal-chips">
                     {list.slice(0, SHOW_CHIPS).map((t) => (
-                      <span key={t.id} className={`cal-chip c${t.plan_id % 6}${t.status === "done" ? " done" : ""}`} title={`${t.title} · ${t.plan_title}`}>{t.title}</span>
+                      <span key={t.id} className={`cal-chip c${t.plan_id % 6}${t.status === "done" ? " done" : ""}`} title={`${t.title} · ${t.plan_title}`}>{t.status === "done" ? "✓ " : ""}{t.title}</span>
                     ))}
                     {list.length > SHOW_CHIPS && <span className="cal-more">+{list.length - SHOW_CHIPS}개 더</span>}
                   </span>

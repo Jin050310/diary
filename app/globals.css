@@ -1,24 +1,26 @@
-/* 밝은 테마: 아주 연한 회색 바탕 + 흰 카드 + 한 단계 진한 안쪽 면. 글자는 짙은 남색 계열(흰 바탕 대비 4.5:1 이상), 파랑은 글자용(accent)·채움용(accent-strong)으로 나눔 */
+/* 잡지(에디토리얼) 느낌: 크림색 바탕 + 검정 잉크 + 파스텔 스티커.
+   버튼·강조 채움은 검정(accent-strong), 링크·강조 글자는 남보라(accent)로 나눔. 글자는 크림 바탕 대비 4.5:1 이상 */
 :root {
   color-scheme: light;
-  --bg: #f3f5f9;          /* 페이지 바탕 */
-  --card: #ffffff;        /* 카드 */
-  --surface: #eef1f6;     /* 카드 안쪽 면(입력창·목록 항목·표 머리) */
-  --text: #191f28;
-  --sub: #4a5565;
-  --muted: #667085;
-  --line: #dfe4ec;
-  --accent: #1b64da;        /* 링크·강조 글자·테두리 */
-  --accent-strong: #2272eb; /* 버튼·오늘·체크 같은 채움 */
-  --accent-press: #1b64da;
-  --accent-soft: #e6f0ff;
+  --bg: #f3f2ec;          /* 페이지 바탕(크림) */
+  --card: #fbfaf6;        /* 카드 */
+  --surface: #eceae0;     /* 카드 안쪽 면(입력창·목록 항목·표 머리) */
+  --text: #111111;
+  --sub: #3f3e39;
+  --muted: #6f6d64;
+  --line: #d9d6c8;
+  --ink: #111111;          /* 격자선·굵은 테두리 */
+  --accent: #3a37d4;        /* 링크·강조 글자 */
+  --accent-strong: #111111; /* 버튼·오늘·체크 같은 채움 */
+  --accent-press: #343434;
+  --accent-soft: #e6e5fa;
   --on-accent: #ffffff;
-  --warn-bg: #fff3d1;
-  --warn-text: #7a4b00;
-  --danger: #d12a38;
-  --danger-soft: #ffe8ea;
-  --ok: #0b8a5d;
-  --radius: 20px;
+  --warn-bg: #fff0c2;
+  --warn-text: #6b4500;
+  --danger: #c8202f;
+  --danger-soft: #fde5e7;
+  --ok: #0b7a55;
+  --radius: 18px;
   --radius-sm: 12px;
 }
 
@@ -586,3 +588,90 @@ a.stat:hover .stat-value { color: var(--accent); }
 .cmp-arrow { font-size: 22px; color: var(--muted); }
 .cmp-diff { font-size: 22px; font-weight: 800; }
 .cmp-diff.ok { color: var(--ok); } .cmp-diff.bad { color: var(--danger); }
+
+/* ═════════ 잡지(에디토리얼) 스타일 — 크림 바탕 · 굵은 제목 · 가는 격자 · 알약 스티커 ═════════ */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+::selection { background: var(--ink); color: #fff; }
+
+/* 상단 메뉴: 검은 선으로 구분, 지금 화면은 검은 알약으로 표시 */
+.topbar { background: var(--bg); backdrop-filter: none; border-bottom: 1.5px solid var(--ink); }
+.topbar .brand { font-family: var(--font-display), var(--font-sans); font-weight: 400; font-size: 26px; letter-spacing: .03em; color: var(--ink); text-transform: uppercase; }
+.topbar nav a { color: var(--ink); font-weight: 700; }
+.topbar nav a:hover { background: var(--surface); color: var(--ink); }
+.topbar nav a.on { background: var(--ink); color: #fff; }
+.topbar nav .export-link { background: transparent; border: 1.5px solid var(--ink); color: var(--ink); padding: 4.5px 12px; }
+.topbar nav .export-link:hover { background: var(--ink); color: #fff; }
+.topbar .who-name { color: var(--ink); }
+
+/* 화면 제목: 굵은 한글 디스플레이 글꼴 */
+h1, .page-head h1, .auth-title { font-family: var(--font-han), var(--font-sans); font-weight: 400; letter-spacing: -0.02em; color: var(--ink); }
+.page-head h1 { font-size: clamp(34px, 5.2vw, 52px); line-height: 1.05; }
+.auth-title { font-size: 34px; }
+.hero-title { font-family: var(--font-han), var(--font-sans); font-weight: 400; font-size: 30px; line-height: 1.2; }
+.cal-month { font-family: var(--font-han), var(--font-sans); font-weight: 400; }
+
+/* 카드·입력·버튼: 가는 선, 흰 입력칸, 검정 채움 */
+.card { border: 1px solid var(--line); }
+input, select, textarea { background: #fff; border: 1px solid #c9c6b6; }
+input:focus, select:focus, textarea:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(17, 17, 17, .12); }
+button.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); }
+button.ghost:hover { background: var(--ink); color: #fff; filter: none; }
+.chip { background: #fff; color: var(--ink); border: 1px solid #bdbaa9; }
+.chip:hover { background: var(--surface); }
+.chip.on, .chip.on:hover { background: var(--ink); border-color: var(--ink); color: #fff; }
+.mini-btn { background: #fff; color: var(--ink); border: 1px solid var(--ink); }
+.mini-btn:hover { background: var(--surface); filter: none; }
+.mini-btn.danger { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+.mini-link { background: #fff; color: var(--ink); border: 1px solid var(--ink); }
+.mini-link.primary { background: var(--ink); color: #fff; box-shadow: none; }
+.mini-link.primary:hover { background: var(--accent-press); }
+.badge { background: var(--surface); color: var(--ink); }
+.badge.p1 { background: var(--danger-soft); color: var(--danger); }
+.legend-chip { background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .14); }
+.legend-chip:hover { background: var(--surface); }
+
+/* ── 달력: 큰 월 이름 + 연도 띠 + 검은 격자 + 파스텔 알약 스티커 ── */
+.year-strip { overflow: hidden; white-space: nowrap; font-size: 12px; font-weight: 600; letter-spacing: .14em; color: var(--ink); border-top: 1px dashed var(--ink); border-bottom: 1px dashed var(--ink); padding: 3px 0; margin: 0 0 4px; }
+.month-giant { font-family: var(--font-display), var(--font-sans); font-weight: 400; text-transform: uppercase; font-size: min(22vw, 300px); line-height: .95; color: var(--ink); white-space: nowrap; overflow: hidden; margin: 0 0 10px; }
+.cal-hint { margin: 0 0 16px; }
+.cal-card { background: transparent; border: 0; padding: 0; }
+.cal-title { margin-bottom: 14px; }
+.cal-title button { background: var(--ink); color: #fff; border-radius: 999px; }
+.cal-title button.ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); }
+.cal-title button.ghost:hover { background: var(--ink); color: #fff; }
+.cal { border: 1.5px solid var(--ink); border-radius: 0; background: transparent; }
+.cal-head { background: transparent; border-bottom: 1.5px solid var(--ink); }
+.cal-head div { color: var(--ink); font-weight: 800; letter-spacing: .04em; padding: 12px 0; border-right: 1.5px solid var(--ink); }
+.cal-head div:last-child { border-right: 0; }
+.cal-head .sun { color: var(--danger); }
+.cal-head .sat { color: var(--ink); }
+.cal-week { border-bottom: 1.5px solid var(--ink); }
+.cal-day { border-right: 1.5px solid var(--ink); min-height: clamp(104px, 14vh, 150px); padding: 8px 8px 10px; }
+.cal-day:hover { background: rgba(17, 17, 17, .04); }
+.cal-top { flex-direction: row-reverse; }
+.cal-day .num { font-size: 15px; font-weight: 700; color: var(--ink); }
+.cal-day.sun .num { color: var(--danger); }
+.cal-day.sat .num { color: var(--ink); }
+.cal-day.today .num { background: var(--ink); color: #fff; }
+.cal-day.out { background: transparent; }
+.cal-day.out .num { color: #a9a698; opacity: 1; }
+.cal-day.out .cal-chips { opacity: .45; }
+.cal-day.selected { background: #fff; box-shadow: inset 0 0 0 3px var(--ink); }
+.due-pill { background: var(--ink); color: #fff; }
+.due-pill.all-done { background: #fff; color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+.cal-chips { gap: 5px; margin-top: 4px; }
+.cal-chip { color: var(--ink); font-weight: 600; font-size: 12.5px; line-height: 22px; padding: 0 11px; border-radius: 999px; background: var(--dot, #fff); box-shadow: 0 2px 5px rgba(0, 0, 0, .2); }
+.cal-chips .cal-chip:nth-child(odd) { transform: rotate(-1.4deg); }
+.cal-chips .cal-chip:nth-child(even) { transform: rotate(1.1deg); }
+.cal-chip.done { opacity: .55; }
+.cal-more { color: var(--ink); font-weight: 700; padding-left: 4px; }
+.dot { box-shadow: 0 0 0 1px rgba(0, 0, 0, .25); }
+
+/* 오른쪽 날짜 패널: 스티커 카드(검은 테두리 + 단단한 그림자) */
+.day-panel { background: #fff; border: 1.5px solid var(--ink); box-shadow: 5px 5px 0 var(--ink); }
+
+/* 폰 화면: 메뉴가 세 줄로 쌓여 높이를 많이 차지하므로 화면에 고정하지 않고 스크롤과 함께 올라가게 한다 */
+@media (max-width: 640px) {
+  .topbar { position: static; }
+  .month-giant { font-size: min(24vw, 300px); }
+}

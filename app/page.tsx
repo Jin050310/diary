@@ -7,7 +7,8 @@ import Calendar, { monthLabel } from "./Calendar";
 import DayPanel from "./DayPanel";
 import PlanForm from "./PlanForm";
 import Projects from "./Projects";
-import { PageHead } from "./ui";
+
+const MONTH_EN = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
 
 export default function Home() {
   const { data: plans, error, reload } = useApi<Plan[]>("/api/plans");
@@ -37,7 +38,11 @@ export default function Home() {
 
   return (
     <>
-      <PageHead title="달력" hint="날짜를 누르면 그날 할 일을 바로 체크하고 추가할 수 있어요." />
+      {/* 잡지 표지처럼: 연도가 반복되는 띠 + 아주 큰 월 이름. (장식이라 스크린 리더에는 읽히지 않게 하고, 제목은 아래 sr-only h1 하나) */}
+      <h1 className="sr-only">달력 {cursor ? monthLabel(cursor.y, cursor.m) : ""}</h1>
+      <div className="year-strip" aria-hidden="true">{cursor ? Array.from({ length: 40 }, () => cursor.y).join(" / ") : ""}</div>
+      <div className="month-giant" aria-hidden="true">{cursor ? MONTH_EN[cursor.m] : "\u00a0"}</div>
+      <p className="page-hint cal-hint">날짜를 누르면 그날 할 일을 바로 체크하고 추가할 수 있어요.</p>
       {error && <p className="error">{error}</p>}
 
       <div className="home-grid">

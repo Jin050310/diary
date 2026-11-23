@@ -26,16 +26,17 @@ export default function TopBar() {
     window.location.assign("/login");
   }
 
+  const on = (href: string) => ((href === "/" ? pathname === "/" : pathname.startsWith(href)) ? "on" : undefined);
   if (onLogin) return null;
   return (
     <header className="topbar">
-      <Link href="/" className="brand">Plan-Do-See</Link>
+      <Link href="/" className="brand">Plan·Do·See</Link>
       <nav>
-        <Link href="/">달력</Link>
-        <Link href="/tasks">할 일</Link>
-        <Link href="/records">실행 기록</Link>
-        <Link href="/direction">진행 방향</Link>
-        <Link href="/retro">회고</Link>
+        <Link href="/" className={on("/")}>달력</Link>
+        <Link href="/tasks" className={on("/tasks")}>할 일</Link>
+        <Link href="/records" className={on("/records")}>실행 기록</Link>
+        <Link href="/direction" className={on("/direction")}>진행 방향</Link>
+        <Link href="/retro" className={on("/retro")}>회고</Link>
         <a href="/api/export" download className="export-link">내보내기</a>
       </nav>
       <div className="who">
