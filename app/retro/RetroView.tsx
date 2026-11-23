@@ -171,6 +171,25 @@ function RetroBody({ initial }: { initial: { plan: string; from: string; to: str
 
       {totals && (
         <>
+          {/* 맨 위 한 줄 결론: 가장 헷갈리는 "시간 차이"는 끝낸 일만 비교한 값으로 보여 준다 */}
+          {totals.task_count > 0 && (
+            <section className={`hero${totals.late_count > 0 ? " behind" : ""}`} style={{ marginTop: 18 }}>
+              <div className="hero-plan">{filteredPlanName ?? "전체 프로젝트"} · 한 줄 결론</div>
+              <h2 className="hero-title">할 일 {totals.task_count}개 중 {totals.done_count}개를 끝냈어요</h2>
+              <p className="hero-sub">
+                {finished.length > 0
+                  ? `끝낸 일은 예상 ${shortMin(finEst)}, 실제 ${shortMin(finAct)}로 ${finAct > finEst ? `예상보다 ${shortMin(finAct - finEst)} 더 걸렸어요.` : finAct < finEst ? `예상보다 ${shortMin(finEst - finAct)} 덜 걸렸어요.` : "예상과 같았어요."}`
+                  : "시간 기록이 있는 끝낸 일이 아직 없어요. 실행 기록을 남기면 예상과 실제를 비교해 드려요."}
+              </p>
+              {(totals.late_count > 0 || totals.blocked_count > 0) && (
+                <p className="hero-warn">
+                  {totals.late_count > 0 && `기한이 지났는데 못 끝낸 일 ${totals.late_count}개`}
+                  {totals.late_count > 0 && totals.blocked_count > 0 && " · "}
+                  {totals.blocked_count > 0 && `막힌 일 ${totals.blocked_count}개`}
+                </p>
+              )}
+            </section>
+          )}
           <div className="section-head" style={{ marginTop: 22 }}><h2>할 일은 어땠나요?</h2></div>
           <div className="stat-grid">
             <button type="button" className={`stat${metric === "tasks" ? " on" : ""}`} onClick={() => pick("tasks")}>

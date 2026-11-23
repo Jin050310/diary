@@ -2,6 +2,7 @@
 // "__test__" 임시 계획으로 /api/direction 이 DB 값을 그대로 읽어 순수 계산(lib/directionCalc.ts)과 같은 결과를 내는지 확인하고, 끝나면 지운다.
 // (마감이 지난 날·늦게 끝낸 날처럼 과거 완료 시각이 필요해서 completions 는 SQL 로 직접 넣는다)
 import postgres from "postgres";
+import { dropTestUser, newTestUser } from "./lib/test-user.mjs";
 import { randomUUID } from "node:crypto";
 import { buildDirection, planMetrics, addDays } from "../lib/directionCalc.ts";
 
@@ -11,14 +12,16 @@ const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 1, onnotic
 
 let fail = 0;
 const check = (ok, msg) => { console.log(`${ok ? "PASS" : "FAIL"} ${msg}`); if (!ok) fail++; };
+let tu; // 점검용 임시 계정 (로그인 쿠키). 인증이 붙은 뒤로는 모든 API 가 로그인을 요구한다
 const call = async (path, init = {}) => {
-  const res = await fetch(BASE + path, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) } });
+  const res = await fetch(BASE + path, { ...init, headers: { "content-type": "application/json", ...(tu ? { cookie: tu.cookie } : {}), ...(init.headers ?? {}) } });
   return { status: res.status, body: await res.json().catch(() => ({})) };
 };
 const post = (path, body, headers) => call(path, { method: "POST", body: JSON.stringify(body), headers });
 const J = (x) => JSON.stringify(x);
 
 try {
+  tu = await newTestUser(BASE);
   const today = (await call("/api/retro")).body.today;
   const at = (offset, hhmm = "10:00") => `${addDays(today, offset)}T${hhmm}:00+09:00`;
 
@@ -36,7 +39,7 @@ try {
 
   const completedAt = { [a.id]: at(-12, "15:00"), [b.id]: at(-6, "15:00"), [e.id]: at(-1, "09:00") };
   for (const [taskId, when] of Object.entries(completedAt)) {
-    await sql`insert into completions (task_id, idempotency_key, completed_at) values (${taskId}, ${randomUUID()}, ${when})`;
+    await sql`insert into completions (user_id, task_id, idempotency_key, completed_at) values (${tu.id}, ${taskId}, ${randomUUID()}, ${when})`;
     await sql`update tasks set status = 'done' where id = ${taskId}`;
   }
   await post(`/api/tasks/${i.id}/complete`, {}, { "idempotency-key": randomUUID() });
@@ -92,6 +95,7 @@ try {
   check((await call("/api/direction")).status === 400 && (await call("/api/direction?plan=abc")).status === 400 && (await call("/api/direction?plan=99999999")).status === 404, "계획 ID 가 없거나 잘못되면 400, 없는 계획이면 404");
   check(!J(got).includes("NaN") && !J(r3).includes("NaN"), "응답에 NaN 없음");
 } finally {
+  if (tu) await dropTestUser(sql, tu.id);
   const plans = (await sql`select id from plans where title like '__test__%'`).map((x) => x.id);
   const tasks = (await sql`select id from tasks where title like '__test__%'`).map((x) => x.id);
   if (tasks.length) {

@@ -1,6 +1,7 @@
 // 사용법: 개발 서버(npm run dev)를 켠 뒤  node scripts/test-tasks-api.mjs
 // 실제 DB 에 "__test__" 제목의 임시 할 일을 만들어 카드 2·3 규칙을 확인하고, 끝나면 전부 지운다.
 import postgres from "postgres";
+import { dropTestUser, newTestUser } from "./lib/test-user.mjs";
 import { randomUUID } from "node:crypto";
 
 try { process.loadEnvFile(".env.local"); } catch {}
@@ -9,14 +10,16 @@ const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 1, onnotic
 
 let fail = 0;
 const check = (id, ok, msg) => { console.log(`${ok ? "PASS" : "FAIL"} ${id} ${msg}`); if (!ok) fail++; };
+let tu; // 점검용 임시 계정 (로그인 쿠키). 인증이 붙은 뒤로는 모든 API 가 로그인을 요구한다
 const call = async (path, init = {}) => {
-  const res = await fetch(BASE + path, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) } });
+  const res = await fetch(BASE + path, { ...init, headers: { "content-type": "application/json", ...(tu ? { cookie: tu.cookie } : {}), ...(init.headers ?? {}) } });
   return { status: res.status, body: await res.json().catch(() => ({})) };
 };
 const post = (path, body, headers) => call(path, { method: "POST", body: JSON.stringify(body), headers });
 
 try {
-  const [plan] = await sql`select id from plans order by id limit 1`;
+  tu = await newTestUser(BASE);
+  const plan = (await post("/api/plans", { title: "__test__ 계획", start_date: "2026-11-20", end_date: "2026-12-17", priority: 2, success_criteria: "테스트", estimated_minutes: 100 })).body;
   const mk = (over) => post("/api/tasks", { plan_id: plan.id, title: "__test__ a", due_date: "2026-12-01", priority: 2, tags: ["테스트", "x"], estimated_minutes: 30, ...over });
 
   // C09, C14~C17 생성 + 마감일·우선순위·태그·예상 시간 저장
@@ -29,7 +32,7 @@ try {
 
   // 잘못된 입력은 서버가 거절
   check("검증", (await mk({ priority: 9 })).status === 400 && (await mk({ title: "" })).status === 400
-    && (await mk({ plan_id: 99999999 })).status === 400, "잘못된 입력 400");
+    && (await mk({ plan_id: 99999999 })).status === 404, "잘못된 입력 400, 없는(또는 남의) 계획은 404");
 
   // C10 수정
   const upd = await call(`/api/tasks/${a.id}`, { method: "PATCH", body: JSON.stringify({ plan_id: plan.id, title: "__test__ a2", due_date: null, priority: 1, tags: [], estimated_minutes: 45 }) });
@@ -88,6 +91,7 @@ try {
   const [{ del }] = await sql`select count(*)::int del from tasks where id = ${s1.id} and deleted_at is not null`;
   check("C13", !ids(await list("")).includes(s1.id) && del === 1 && (await call(`/api/tasks/${s1.id}`)).status === 404, "삭제 → 목록에서 제외, 행은 삭제 표시로 보존");
 } finally {
+  if (tu) await dropTestUser(sql, tu.id);
   const rows = await sql`select id from tasks where title like '__test__%'`;
   const ids = rows.map((r) => r.id);
   if (ids.length) {

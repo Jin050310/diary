@@ -24,6 +24,11 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     cache: "no-store",
   });
   const data = await res.json().catch(() => ({}));
+  // 로그인이 풀렸거나(만료·로그아웃·다른 곳에서 비밀번호 변경) 로그인하지 않았다면 로그인 화면으로 보낸다.
+  // 로그인 화면 자신에서는 보내지 않는다(틀린 비밀번호도 401 이라서).
+  if (res.status === 401 && typeof window !== "undefined" && window.location.pathname !== "/login") {
+    window.location.assign("/login");
+  }
   if (!res.ok) throw new Error(data?.error ?? `요청 실패 (${res.status})`);
   return data as T;
 }

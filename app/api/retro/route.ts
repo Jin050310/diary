@@ -10,7 +10,7 @@ import { BadRequest, date } from "@/lib/validate";
 //  - 막힘 수(C31)   : 막힘 사유가 하나 이상 기록된 할 일 수
 //  - 시간(C32)      : 예상 = 할 일 예상 시간 합, 실제 = 실행 기록 합, 차이 = 실제 − 예상 (대상이 없으면 모두 0)
 export async function GET(req: Request) {
-  return handle(async () => {
+  return handle(async (user) => {
     const sp = new URL(req.url).searchParams;
     const sql = db();
     const plan = sp.get("plan") ? Number(sp.get("plan")) : null;
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
                bool_or(e.blocker is not null and btrim(e.blocker) <> '') as blocked
         from executions e where e.task_id = t.id
       ) x on true
-      where t.deleted_at is null
+      where t.user_id = ${user.id} and t.deleted_at is null
         ${plan ? sql`and t.plan_id = ${plan}` : sql``}
         ${from ? sql`and t.due_date >= ${from}::date` : sql``}
         ${to ? sql`and t.due_date <= ${to}::date` : sql``}
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
       ? await sql`
           select e.id, e.task_id, t.title as task_title, e.started_at, e.ended_at, e.actual_minutes, e.blocker
           from executions e join tasks t on t.id = e.task_id
-          where e.task_id in ${sql(ids)}
+          where e.user_id = ${user.id} and e.task_id in ${sql(ids)}
           order by e.started_at desc, e.id desc`
       : [];
 

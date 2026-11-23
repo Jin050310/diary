@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { handle, readJson } from "@/lib/http";
+import { handle, NotFound, readJson } from "@/lib/http";
 import { BadRequest, taskInput } from "@/lib/validate";
 
 // 정렬은 허용 목록(화이트리스트)만 SQL 에 붙인다. 사용자 입력을 그대로 넣지 않는다. (SQL 주입 방지)
@@ -14,7 +14,7 @@ const SORTS: Record<string, string> = {
 // 필터·검색·정렬은 서버(SQL)에서 처리한다. 같은 조건이면 언제나 같은 순서가 나온다.
 // 정렬 키 값이 같을 때는 t.id 오름차순을 마지막 보조 기준(tie-breaker)으로 쓴다.
 export async function GET(req: Request) {
-  return handle(async () => {
+  return handle(async (user) => {
     const sp = new URL(req.url).searchParams;
     const sql = db();
 
@@ -42,7 +42,7 @@ export async function GET(req: Request) {
              (select count(*)::int from executions e where e.task_id = t.id) as exec_count,
              (select coalesce(sum(e.actual_minutes), 0)::int from executions e where e.task_id = t.id) as actual_minutes
       from tasks t join plans p on p.id = t.plan_id
-      where t.deleted_at is null
+      where t.user_id = ${user.id} and t.deleted_at is null
         ${plan ? sql`and t.plan_id = ${plan}` : sql``}
         ${status !== "all" ? sql`and t.status = ${status}` : sql``}
         ${priority ? sql`and t.priority = ${priority}` : sql``}
@@ -57,14 +57,14 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  return handle(async () => {
+  return handle(async (user) => {
     const v = taskInput(await readJson(req));
     const sql = db();
-    const [plan] = await sql`select id from plans where id = ${v.plan_id}`;
-    if (!plan) throw new BadRequest("존재하지 않는 계획입니다.");
+    const [plan] = await sql`select id from plans where id = ${v.plan_id} and user_id = ${user.id}`;
+    if (!plan) throw new NotFound("계획을 찾을 수 없습니다.");
     const [row] = await sql`
-      insert into tasks (plan_id, title, due_date, priority, tags, estimated_minutes)
-      values (${v.plan_id}, ${v.title}, ${v.due_date}, ${v.priority}, ${v.tags}::text[], ${v.estimated_minutes})
+      insert into tasks (user_id, plan_id, title, due_date, priority, tags, estimated_minutes)
+      values (${user.id}, ${v.plan_id}, ${v.title}, ${v.due_date}, ${v.priority}, ${v.tags}::text[], ${v.estimated_minutes})
       returning *`;
     return Response.json(row, { status: 201 });
   });

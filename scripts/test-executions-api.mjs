@@ -1,6 +1,7 @@
 // 사용법: 개발 서버를 켠 뒤  node scripts/test-executions-api.mjs
 // "__test__" 임시 할 일로 카드 3(실행 기록·중복 완료 방지)을 실제 DB 에서 확인하고, 끝나면 전부 지운다.
 import postgres from "postgres";
+import { dropTestUser, newTestUser } from "./lib/test-user.mjs";
 import { randomUUID } from "node:crypto";
 
 try { process.loadEnvFile(".env.local"); } catch {}
@@ -9,14 +10,16 @@ const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 1, onnotic
 
 let fail = 0;
 const check = (id, ok, msg) => { console.log(`${ok ? "PASS" : "FAIL"} ${id} ${msg}`); if (!ok) fail++; };
+let tu; // 점검용 임시 계정 (로그인 쿠키). 인증이 붙은 뒤로는 모든 API 가 로그인을 요구한다
 const call = async (path, init = {}) => {
-  const res = await fetch(BASE + path, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) } });
+  const res = await fetch(BASE + path, { ...init, headers: { "content-type": "application/json", ...(tu ? { cookie: tu.cookie } : {}), ...(init.headers ?? {}) } });
   return { status: res.status, body: await res.json().catch(() => ({})) };
 };
 const post = (path, body, headers) => call(path, { method: "POST", body: JSON.stringify(body), headers });
 
 try {
-  const [plan] = await sql`select * from plans order by id limit 1`;
+  tu = await newTestUser(BASE);
+  const plan = (await post("/api/plans", { title: "__test__ 계획", start_date: "2026-11-20", end_date: "2026-12-17", priority: 2, success_criteria: "테스트", estimated_minutes: 100 })).body;
   const t = (await post("/api/tasks", { plan_id: plan.id, title: "__test__ exec", due_date: "2026-12-01", priority: 2, tags: ["t"], estimated_minutes: 60 })).body;
 
   const planBefore = (await sql`select * from plans where id = ${plan.id}`)[0];
@@ -78,6 +81,7 @@ try {
   const comps = (await call("/api/completions")).body.filter((c) => c.task_id === t.id);
   check("C22", comps.length === 1 && comps[0].canceled_at === null && comps[0].task_title === "__test__ exec", "완료 기록 목록에도 1건만 보임");
 } finally {
+  if (tu) await dropTestUser(sql, tu.id);
   const rows = await sql`select id from tasks where title like '__test__%'`;
   const ids = rows.map((r) => r.id);
   if (ids.length) {

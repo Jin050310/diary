@@ -1,10 +1,12 @@
 // 사용법: 개발(또는 배포 빌드) 서버를 켠 뒤  node scripts/test-security.mjs
 // 카드 5 점검: ① 스크립트 삽입(XSS)이 텍스트로만 보이는지  ② 비밀값(DB 접속 문자열·비밀번호)이 어디에도 남지 않았는지
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import postgres from "postgres";
+import { dropTestUser, newTestUser } from "./lib/test-user.mjs";
 
 try { process.loadEnvFile(".env.local"); } catch {}
 const BASE = process.env.BASE ?? "http://localhost:3000";
@@ -12,8 +14,9 @@ const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 1, onnotic
 
 let fail = 0;
 const check = (id, ok, msg) => { console.log(`${ok ? "PASS" : "FAIL"} ${id} ${msg}`); if (!ok) fail++; };
+let tu; // 점검용 임시 계정 (로그인 쿠키). 인증이 붙은 뒤로는 모든 API 가 로그인을 요구한다
 const call = async (path, init = {}) => {
-  const res = await fetch(BASE + path, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) } });
+  const res = await fetch(BASE + path, { ...init, headers: { "content-type": "application/json", ...(tu ? { cookie: tu.cookie } : {}), ...(init.headers ?? {}) } });
   return { status: res.status, text: await res.text() };
 };
 const post = (path, body) => call(path, { method: "POST", body: JSON.stringify(body) });
@@ -62,6 +65,7 @@ const dbImporters = [...walk("app"), ...walk("lib")].filter((f) => /from "@\/lib
 check("C58", dbImporters.every((f) => f.startsWith("app/api/") || f.startsWith("lib/")) && !dbImporters.some((f) => /^app\/(?!api\/).*\.tsx$/.test(f)),
   `DB 접속 코드는 서버 전용(app/api, lib)에서만 불림 (${dbImporters.length}곳)`);
 
+tu = await newTestUser(BASE);
 // API 응답(정상·오류)과 내보내기 파일, 서버 로그에도 비밀값이 없는지
 const probes = ["/api/plans", "/api/tasks", "/api/executions", "/api/completions", "/api/retro", "/api/retro-notes", "/api/export",
   "/api/plans/abc", "/api/plans/99999999", "/api/tasks?sort=x", "/api/tasks/99999999"];
@@ -73,15 +77,49 @@ check("C58", !apiLeak, `API 응답 ${bodies.length}개(정상·오류·내보내
 const errBodies = bodies.filter((b) => b.includes('"error"'));
 check("C58", errBodies.every((b) => !/postgres|SQL|stack| at |ECONN|password/i.test(b)), `오류 응답 ${errBodies.length}개에 DB 내부 정보·스택 없음`);
 const log = process.env.DEV_LOG ?? join(tmpdir(), "dev.log");
-if (existsSync(log)) {
+// 오래된 로그 파일을 읽고 "문제없음" 으로 통과시키지 않도록, 최근 2시간 안에 기록된 로그일 때만 검사한다
+const logFresh = existsSync(log) && Date.now() - statSync(log).mtimeMs < 2 * 3600 * 1000;
+if (logFresh) {
   const t = readFileSync(log, "utf8");
   check("C58", !Object.values(secrets).some((s) => s && t.includes(s)), "서버 콘솔 로그에 비밀값 없음");
-} else console.log("INFO  서버 로그 파일을 찾지 못해 콘솔 로그 검사는 건너뜀");
+} else console.log("INFO  최근 서버 로그 파일이 없어 콘솔 로그 검사는 건너뜀 → 서버를 켤 때 출력을 임시 폴더의 dev.log 로 저장하면(npm run start > dev.log) 검사됨");
 
 // ───────────── ① XSS ─────────────
 const src = [...walk("app"), ...walk("lib")].filter((f) => /\.(tsx?|jsx?)$/.test(f));
 const dangerous = src.filter((f) => /dangerouslySetInnerHTML|\.innerHTML\s*=|document\.write|\beval\(|new Function\(/.test(readFileSync(f, "utf8")));
 check("C57", dangerous.length === 0, `HTML 을 직접 꽂는 코드(dangerouslySetInnerHTML·innerHTML·eval 등) 없음 (${src.length}개 소스 검사)`);
+
+// 로그인 쿠키를 심은 헤드리스 Edge 로 화면을 열어 렌더링된 HTML 을 돌려준다 (Chrome DevTools Protocol)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function renderPages(edgePath, paths, cookieValue) {
+  const port = 9300 + Math.floor(Math.random() * 500);
+  const userDir = mkdtempSync(join(tmpdir(), "edge-sec-"));
+  const proc = spawn(edgePath, ["--headless=new", "--disable-gpu", `--remote-debugging-port=${port}`, `--user-data-dir=${userDir}`, "about:blank"], { stdio: "ignore" });
+  try {
+    let page;
+    for (let i = 0; i < 60 && !page; i++) {
+      try { page = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).find((t) => t.type === "page"); } catch {}
+      if (!page) await sleep(250);
+    }
+    if (!page) return {};
+    const ws = new WebSocket(page.webSocketDebuggerUrl);
+    await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+    let id = 0; const waiting = new Map();
+    ws.onmessage = (m) => { const d = JSON.parse(m.data); if (d.id && waiting.has(d.id)) { waiting.get(d.id)(d); waiting.delete(d.id); } };
+    const send = (method, params = {}) => new Promise((res) => { const i = ++id; waiting.set(i, res); ws.send(JSON.stringify({ id: i, method, params })); });
+    await send("Network.enable");
+    await send("Network.setCookie", { name: "pds_session", value: cookieValue, url: BASE });
+    const out = {};
+    for (const p of paths) {
+      await send("Page.navigate", { url: BASE + p });
+      await sleep(6000);
+      const r = await send("Runtime.evaluate", { expression: "document.documentElement.outerHTML", returnByValue: true });
+      out[p] = r.result?.result?.value ?? "";
+    }
+    ws.close();
+    return out;
+  } finally { proc.kill(); try { rmSync(userDir, { recursive: true, force: true }); } catch {} }
+}
 
 const PAYLOAD = '<script>window.__pwn=1</script><img src="/__xss_probe__" onerror="window.__pwn=2">';
 const edge = ["C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "C:/Program Files/Microsoft/Edge/Application/msedge.exe"].find(existsSync);
@@ -97,10 +135,8 @@ try {
 
   if (!edge) console.log("INFO  Edge 를 찾지 못해 화면 렌더링 검사는 건너뜀");
   else {
-    const dom = (path) => spawnSync(edge, ["--headless=new", "--disable-gpu", "--virtual-time-budget=9000", "--dump-dom", BASE + path],
-      { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout ?? "";
     const pages = [["/tasks", "할 일 목록"], ["/records", "실행 기록(막힘 사유 포함)"], ["/retro", "회고"], [`/plans/${planId}`, "계획 상세"], ["/", "달력·계획 목록"]];
-    const doms = Object.fromEntries(pages.map(([p]) => [p, dom(p)]));
+    const doms = await renderPages(edge, pages.map(([p]) => p), tu.cookie.replace("pds_session=", ""));
     for (const [p, label] of pages) {
       const d = doms[p];
       check("C57", d.includes("&lt;script&gt;window.__pwn=1&lt;/script&gt;"), `${label}(${p}): 스크립트 문자열이 글자 그대로(이스케이프되어) 표시됨`);
@@ -108,12 +144,13 @@ try {
     // 진짜 <img> 요소로 해석되었다면 브라우저가 /__xss_probe__ 를 요청해 서버 로그에 남는다
     const bad = [...Object.values(doms)].filter((d) => !d.length).length;
     check("C57", bad === 0, "모든 화면이 렌더링됨(빈 응답 없음)");
-    if (existsSync(log)) {
+    if (logFresh) {
       const t = readFileSync(log, "utf8");
       check("C57", !t.includes("__xss_probe__"), "삽입한 <img> 가 실제 요소로 실행되지 않음(서버에 /__xss_probe__ 요청이 오지 않음)");
-    } else console.log("INFO  서버 로그가 없어 <img> 실행 여부 검사는 건너뜀");
+    } else console.log("INFO  최근 서버 로그가 없어 <img> 실행 여부 검사는 건너뜀");
   }
 } finally {
+  if (tu) await dropTestUser(sql, tu.id);
   if (taskId) { await sql`delete from executions where task_id = ${taskId}`; await sql`delete from completions where task_id = ${taskId}`; await sql`delete from tasks where id = ${taskId}`; }
   if (planId) await sql`delete from plans where id = ${planId}`;
   for (const tbl of ["plans", "tasks", "executions", "completions", "plan_revisions"]) {

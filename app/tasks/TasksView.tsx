@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useDeferredValue, useState, useSyncExternalStore } from "react";
-import { api, dueLabel, kstToday, noopSubscribe, PRIORITY, shortMin } from "@/lib/format";
+import { api, daysBetween, dueLabel, kstToday, mdKo, noopSubscribe, PRIORITY, shortMin } from "@/lib/format";
 import { toggleTask } from "@/lib/taskActions";
 import type { Plan, Task, TaskInput } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
@@ -86,6 +86,7 @@ export default function TasksView() {
 
   const filtered = view !== "open" || !!(q.trim() || plan || priority || tag);
   const reset = () => { setView("open"); setQ(""); setPlan(""); setPriority(""); setTag(""); };
+  const sections: Section[] = sort === "due" ? groupByDue(tasks ?? [], today) : [{ key: "flat", label: "", tone: "", items: tasks ?? [] }];
 
   return (
     <>
@@ -182,8 +183,16 @@ export default function TasksView() {
               {filtered ? "조건에 맞는 할 일이 없어요. 위의 '조건 초기화'를 눌러 보세요." : "해야 할 일이 없어요 🎉 오른쪽 위 '+ 새 할 일'로 추가해 보세요."}
             </p>
           ) : (
-            <ul className="trow-list">
-              {tasks.map((t) => {
+            <>
+              {sections.map((s) => (
+                <div key={s.key} className="date-group">
+                  {s.label && (
+                    <h3 className={`date-head${s.tone ? ` ${s.tone}` : ""}`}>
+                      {s.label}<span className="date-count">{s.items.length}개</span>
+                    </h3>
+                  )}
+                  <ul className="trow-list">
+                    {s.items.map((t) => {
                 if (editingId === t.id && plans) {
                   return (
                     <li key={t.id} className="trow editing">
@@ -209,7 +218,8 @@ export default function TasksView() {
                       </div>
                       <div className="t-sub">
                         <Link href={`/plans/${t.plan_id}`}>{t.plan_title}</Link>
-                        <span className={dl.tone === "late" ? "due-late" : dl.tone === "soon" ? "due-soon" : ""}>{dl.text}</span>
+                        {/* 날짜별로 묶어 보여 줄 때는 묶음 제목에 마감이 있으므로 줄마다 반복하지 않는다 */}
+                        {!s.label && <span className={dl.tone === "late" ? "due-late" : dl.tone === "soon" ? "due-soon" : ""}>{dl.text}</span>}
                         <span>예상 {shortMin(t.estimated_minutes)}</span>
                         {(t.exec_count ?? 0) > 0 && <span>기록 {t.exec_count}회 · 실제 {shortMin(t.actual_minutes)}</span>}
                         {t.tags.length > 0 && <span className="t-tags">{t.tags.map((x) => <span key={x} className="tag-mini">{x}</span>)}</span>}
@@ -222,11 +232,39 @@ export default function TasksView() {
                     </div>
                   </li>
                 );
-              })}
-            </ul>
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </>
           )}
         </section>
       )}
     </>
   );
+}
+
+// 정렬이 "마감일"일 때만 같은 마감일끼리 묶는다. (다른 정렬 기준은 묶으면 그 순서가 깨지므로 한 줄 목록 그대로)
+// 서버가 마감일 순으로 이미 정렬해서 주므로, 이웃한 같은 날짜만 한 묶음으로 모으면 된다.
+type Section = { key: string; label: string; tone: "" | "late" | "today"; items: Task[] };
+function groupByDue(tasks: Task[], today: string | null): Section[] {
+  const out: Section[] = [];
+  for (const t of tasks) {
+    const key = t.due_date ?? "none";
+    let g = out[out.length - 1];
+    if (!g || g.key !== key) { g = { key, label: "", tone: "", items: [] }; out.push(g); }
+    g.items.push(t);
+  }
+  for (const g of out) {
+    const due = g.key === "none" ? null : g.key;
+    if (!due) { g.label = "마감 없음"; continue; }
+    if (!today) { g.label = mdKo(due); continue; }
+    const d = daysBetween(today, due);
+    const open = g.items.some((t) => t.status === "todo");
+    if (d === 0) { g.label = `오늘 · ${mdKo(due)}`; g.tone = "today"; }
+    else if (d === 1) g.label = `내일 · ${mdKo(due)}`;
+    else if (d < 0 && open) { g.label = `${-d}일 지남 · ${mdKo(due)}`; g.tone = "late"; }
+    else g.label = mdKo(due);
+  }
+  return out;
 }

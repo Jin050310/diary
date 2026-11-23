@@ -35,9 +35,9 @@ for (const [t, def] of Object.entries(contract.tables)) {
 const fks = await sql`
   select tc.table_name t, kcu.column_name c, ccu.table_name ref_t, ccu.column_name ref_c, rc.delete_rule dr
   from information_schema.table_constraints tc
-  join information_schema.key_column_usage kcu on kcu.constraint_name = tc.constraint_name
-  join information_schema.referential_constraints rc on rc.constraint_name = tc.constraint_name
-  join information_schema.constraint_column_usage ccu on ccu.constraint_name = rc.unique_constraint_name
+  join information_schema.key_column_usage kcu on kcu.constraint_name = tc.constraint_name and kcu.constraint_schema = tc.constraint_schema
+  join information_schema.referential_constraints rc on rc.constraint_name = tc.constraint_name and rc.constraint_schema = tc.constraint_schema
+  join information_schema.constraint_column_usage ccu on ccu.constraint_name = rc.unique_constraint_name and ccu.constraint_schema = rc.unique_constraint_schema
   where tc.constraint_type = 'FOREIGN KEY' and tc.table_schema = 'public'`;
 let fkCount = 0;
 for (const [t, def] of Object.entries(contract.tables)) {

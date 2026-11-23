@@ -11,6 +11,7 @@
     "test:schema": "node scripts/test-schema.mjs"
   },
   "dependencies": {
+    "@node-rs/argon2": "2.2.2",
     "next": "16.4.6",
     "postgres": "^4.1.1",
     "react": "19.3.0",

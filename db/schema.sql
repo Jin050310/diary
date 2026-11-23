@@ -134,3 +134,39 @@ alter table retro_notes    enable row level security;
 -- 카드 4: 회고 개선점 한 건은 다음 계획 하나에만 반영된다 (DB 가 중복 반영을 막음)
 create unique index if not exists uq_plans_source_retro
   on plans(source_retro_note_id) where source_retro_note_id is not null;
+
+-- ───────────── 과제 7: 회원·세션·소유자 ─────────────
+-- 아이디는 소문자로 저장해 대소문자만 다른 중복 가입을 막는다. 비밀번호는 argon2id 해시(솔트 포함)만 저장한다.
+create table if not exists users (
+  id             bigserial primary key,
+  username       text        not null unique check (username ~ '^[a-z0-9_]{3,30}$'),
+  password_hash  text        not null,
+  created_at     timestamptz not null default now()
+);
+
+-- 세션: 브라우저 쿠키에는 무작위 토큰 원문, DB 에는 그 토큰의 SHA-256 해시만 둔다. (DB 가 유출돼도 토큰으로 로그인할 수 없다)
+-- 행을 지우면 즉시 무효. 만료 시각이 지난 행도 인정하지 않는다.
+create table if not exists sessions (
+  id           bigserial primary key,
+  user_id      bigint      not null references users(id) on delete cascade,
+  token_hash   text        not null unique,
+  created_at   timestamptz not null default now(),
+  expires_at   timestamptz not null
+);
+create index if not exists idx_sessions_user on sessions(user_id);
+
+-- 모든 자료의 소유자. 이관 전에는 비어 있고(어느 계정에도 안 보임), scripts/claim-data.mjs 가 채운 뒤 NOT NULL 로 바꾼다.
+-- (plan_revisions 는 plan_id 로 계획을 따라가므로 별도 칸이 없다)
+alter table plans       add column if not exists user_id bigint references users(id);
+alter table tasks       add column if not exists user_id bigint references users(id);
+alter table executions  add column if not exists user_id bigint references users(id);
+alter table completions add column if not exists user_id bigint references users(id);
+alter table retro_notes add column if not exists user_id bigint references users(id);
+create index if not exists idx_plans_user       on plans(user_id);
+create index if not exists idx_tasks_user       on tasks(user_id);
+create index if not exists idx_executions_user  on executions(user_id);
+create index if not exists idx_completions_user on completions(user_id);
+create index if not exists idx_retro_user       on retro_notes(user_id);
+
+alter table users    enable row level security;
+alter table sessions enable row level security;

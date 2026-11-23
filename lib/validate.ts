@@ -116,3 +116,30 @@ export function executionInput(body: unknown) {
     blocker: str(o, "blocker", "막힘 사유", 1000, { optional: true }),
   };
 }
+
+// ───── 가입·로그인 입력 (과제 7) ─────
+// 아이디는 소문자·숫자·밑줄 3~30자 (대문자는 소문자로 바꿔 대소문자만 다른 중복 가입을 막는다)
+export function credentialsInput(body: unknown, opts: { strict: boolean }) {
+  const o = asObject(body);
+  const rawName = o.username;
+  const rawPw = o.password;
+  if (typeof rawName !== "string" || !rawName.trim()) throw new BadRequest("아이디를 입력하세요.");
+  if (typeof rawPw !== "string" || !rawPw) throw new BadRequest("비밀번호를 입력하세요.");
+  const username = rawName.trim().toLowerCase();
+  if (opts.strict) {
+    if (!/^[a-z0-9_]{3,30}$/.test(username)) throw new BadRequest("아이디는 영문 소문자·숫자·밑줄(_) 3~30자로 입력하세요.");
+    if (rawPw.length < 8) throw new BadRequest("비밀번호는 8자 이상으로 입력하세요.");
+  }
+  if (rawPw.length > 128) throw new BadRequest("비밀번호는 128자 이하로 입력하세요.");
+  return { username, password: rawPw };
+}
+
+export function newPasswordInput(body: unknown) {
+  const o = asObject(body);
+  const current = o.current_password;
+  const next = o.new_password;
+  if (typeof current !== "string" || !current) throw new BadRequest("현재 비밀번호를 입력하세요.");
+  if (typeof next !== "string" || next.length < 8) throw new BadRequest("새 비밀번호는 8자 이상으로 입력하세요.");
+  if (next.length > 128) throw new BadRequest("비밀번호는 128자 이하로 입력하세요.");
+  return { current, next };
+}

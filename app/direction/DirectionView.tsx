@@ -5,7 +5,7 @@ import { api, dueLabel, mdKo, daysBetween, shortMin, minutes as fmtLong } from "
 import { WEEKDAY_NAMES, fmtMin, type DirectionResponse, type Improvement, type SeriesPoint } from "@/lib/directionCalc";
 import type { Plan, Task } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
-import { Chips, PageHead, Stat } from "../ui";
+import { Chips, PageHead, ProgressBar, Stat } from "../ui";
 
 const mmdd = (iso: string) => iso.slice(5).replace("-", "/");
 const pctText = (r: number | null) => (r === null ? "-" : `${Math.round(r * 100)}%`);
@@ -91,27 +91,14 @@ function Body({ planId }: { planId: number }) {
         <div className="hero-plan">{d.plan.title}</div>
         <h2 className="hero-title">{title}</h2>
         <p className="hero-sub">{sub}</p>
+        {!noTasks && (
+          <div className="hero-progress">
+            <ProgressBar value={Math.round((p.percent_done ?? 0) * 100)} max={100} tone={p.pace === "behind" ? "warn" : "accent"} />
+            <span>전체 {pctText(p.percent_done)} 진행 · {t.done_count}/{t.task_count}개 끝냄</span>
+          </div>
+        )}
         {p.overdue_open_est > 0 && <p className="hero-warn">기한이 지났는데 아직 안 끝난 분량이 {shortMin(p.overdue_open_est)} 있어요.</p>}
       </section>
-
-      <div className="stat-grid dir-stats">
-        <Link href={retroHref(planId, "done")} className="stat">
-          <span className="stat-label">끝낸 일</span>
-          <span className="stat-value">{t.done_count}<span className="stat-unit">/{t.task_count}개</span></span>
-          <span className="stat-hint">전체의 {pctText(p.percent_done)} (예상 시간 기준)</span>
-        </Link>
-        <Stat label="남은 기간" value={left < 0 ? "종료" : left === 0 ? "오늘까지" : `D-${left}`} hint={`${mdKo(d.plan.end_date)}까지`} />
-        <Link href={retroHref(planId, "diff")} className="stat">
-          <span className="stat-label">예상과 실제</span>
-          <span className="stat-value">{biasText(pt.bias.ratio)}</span>
-          <span className="stat-hint">{pt.bias.ratio === null ? "끝낸 일 중 기록이 있는 게 아직 없어요" : pt.bias.ratio > 1.1 ? `예상보다 오래 걸려요 (끝낸 ${pt.bias.n}개 기준)` : pt.bias.ratio < 0.9 ? `예상보다 빨리 끝나요 (끝낸 ${pt.bias.n}개 기준)` : `예상과 비슷해요 (끝낸 ${pt.bias.n}개 기준)`}</span>
-        </Link>
-        <Link href={week ? retroHref(planId, "tasks", week.start, week.end) : retroHref(planId, "tasks")} className="stat">
-          <span className="stat-label">이번 주</span>
-          <span className="stat-value small">{week ? `${shortMin(week.planned)} 계획` : "-"}</span>
-          <span className="stat-hint">{week ? `실제 ${shortMin(week.actual)} · 마감 ${week.due_count}개 중 ${week.done_count}개 완료` : "이번 주 계획이 없어요"}</span>
-        </Link>
-      </div>
 
       {/* ② 지금 해야 할 것 */}
       <section className="card">
@@ -140,9 +127,29 @@ function Body({ planId }: { planId: number }) {
         )}
       </section>
 
+      <div className="stat-grid dir-stats">
+        <Link href={retroHref(planId, "done")} className="stat">
+          <span className="stat-label">끝낸 일</span>
+          <span className="stat-value">{t.done_count}<span className="stat-unit">/{t.task_count}개</span></span>
+          <span className="stat-hint">전체의 {pctText(p.percent_done)} (예상 시간 기준)</span>
+        </Link>
+        <Stat label="남은 기간" value={left < 0 ? "종료" : left === 0 ? "오늘까지" : `D-${left}`} hint={`${mdKo(d.plan.end_date)}까지`} />
+        <Link href={retroHref(planId, "diff")} className="stat">
+          <span className="stat-label">걸린 시간 (예상 대비)</span>
+          <span className="stat-value">{pt.bias.ratio === null ? "-" : `예상의 ${pt.bias.ratio.toFixed(1)}배`}</span>
+          <span className="stat-hint">{pt.bias.ratio === null ? "끝낸 일 중 기록이 있는 게 아직 없어요" : pt.bias.ratio > 1.1 ? `예상보다 오래 걸려요 (끝낸 ${pt.bias.n}개 기준)` : pt.bias.ratio < 0.9 ? `예상보다 빨리 끝나요 (끝낸 ${pt.bias.n}개 기준)` : `예상과 비슷해요 (끝낸 ${pt.bias.n}개 기준)`}</span>
+        </Link>
+        <Link href={week ? retroHref(planId, "tasks", week.start, week.end) : retroHref(planId, "tasks")} className="stat">
+          <span className="stat-label">이번 주</span>
+          <span className="stat-value small">{week ? `${shortMin(week.planned)} 계획` : "-"}</span>
+          <span className="stat-hint">{week ? `실제 ${shortMin(week.actual)} · 마감 ${week.due_count}개 중 ${week.done_count}개 완료` : "이번 주 계획이 없어요"}</span>
+        </Link>
+      </div>
+
       {/* ③ 계획 대비 진행 그래프 */}
-      <section className="card">
-        <h2>계획 대비 진행</h2>
+      <details className="acc">
+        <summary><span>그래프로 보기 <span className="acc-hint">계획·완료·쓴 시간</span></span></summary>
+        <div className="acc-body">
         <div className="chart-legend">
           <span><i className="lg plan" />계획 (마감일까지 끝냈어야 할 분량)</span>
           <span><i className="lg done" />완료 (끝낸 할 일)</span>
@@ -150,7 +157,8 @@ function Body({ planId }: { planId: number }) {
         </div>
         <Chart series={d.series} today={d.today} />
         <p className="muted">파란 선(완료)이 점선(계획)보다 아래면 뒤처진 거예요. 주황 선(쓴 시간)이 파란 선보다 위면 예상보다 시간을 더 쓰고 있다는 뜻이에요.</p>
-      </section>
+        </div>
+      </details>
 
       {/* ④ 자세히: 필요할 때만 펼친다 */}
       <details className="acc">

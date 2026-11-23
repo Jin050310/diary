@@ -1,6 +1,7 @@
 // 사용법: 개발 서버를 켠 뒤  node scripts/test-retro-api.mjs
 // "__test__" 임시 계획·할 일로 카드 4(회고 집계 C28~C33)를 실제 DB 에서 확인하고, 끝나면 전부 지운다.
 import postgres from "postgres";
+import { dropTestUser, newTestUser } from "./lib/test-user.mjs";
 import { randomUUID } from "node:crypto";
 
 try { process.loadEnvFile(".env.local"); } catch {}
@@ -9,14 +10,16 @@ const sql = postgres(process.env.DATABASE_URL, { prepare: false, max: 1, onnotic
 
 let fail = 0;
 const check = (id, ok, msg) => { console.log(`${ok ? "PASS" : "FAIL"} ${id} ${msg}`); if (!ok) fail++; };
+let tu; // 점검용 임시 계정 (로그인 쿠키). 인증이 붙은 뒤로는 모든 API 가 로그인을 요구한다
 const call = async (path, init = {}) => {
-  const res = await fetch(BASE + path, { ...init, headers: { "content-type": "application/json", ...(init.headers ?? {}) } });
+  const res = await fetch(BASE + path, { ...init, headers: { "content-type": "application/json", ...(tu ? { cookie: tu.cookie } : {}), ...(init.headers ?? {}) } });
   return { status: res.status, body: await res.json().catch(() => ({})) };
 };
 const post = (path, body, headers) => call(path, { method: "POST", body: JSON.stringify(body), headers });
 const addDays = (iso, n) => new Date(Date.parse(iso + "T00:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 
 try {
+  tu = await newTestUser(BASE);
   const today = (await call("/api/retro")).body.today;
   const past = addDays(today, -10), future = addDays(today, 10);
 
@@ -82,8 +85,9 @@ try {
   check("C33", again.status === 400, "같은 개선점으로 다음 계획을 두 번 만들 수 없음");
   const notes = (await call("/api/retro-notes")).body.find((n) => n.id === note.id);
   check("C33", notes?.next_plan_id === next.body.id, "개선점 목록에서 반영된 다음 계획이 보임");
-  check("검증", (await post("/api/retro-notes", { plan_id: P.id, improvement: "" })).status === 400 && (await post("/api/retro-notes", { plan_id: 99999999, improvement: "x" })).status === 400, "빈 개선점·없는 계획은 400");
+  check("검증", (await post("/api/retro-notes", { plan_id: P.id, improvement: "" })).status === 400 && (await post("/api/retro-notes", { plan_id: 99999999, improvement: "x" })).status === 404, "빈 개선점은 400, 없는(또는 남의) 계획은 404");
 } finally {
+  if (tu) await dropTestUser(sql, tu.id);
   const plans = (await sql`select id from plans where title like '__test__%'`).map((r) => r.id);
   const tasks = (await sql`select id from tasks where title like '__test__%'`).map((r) => r.id);
   if (tasks.length) {
