@@ -243,8 +243,6 @@ ${when} · ${shortMin(e.actual_minutes)}
         </div>
       </section>
 
-      <FiveDaySummary refreshKey={`${execs?.length ?? 0}-${execs?.[0]?.id ?? 0}`} />
-
       <div className="section-head"><h2>내가 남긴 기록 <span className="muted">({execs?.length ?? 0}건)</span></h2></div>
       <p className="list-intro">
         지금까지 <b>실제로 한 일</b>을 날짜별로 모아 둔 목록이에요. 위에서 저장한 기록이 여기에 쌓여요.
@@ -279,7 +277,9 @@ ${when} · ${shortMin(e.actual_minutes)}
         );
       })}
 
-      <details className="acc" style={{ marginTop: 18 }}>
+      <FiveDaySummary refreshKey={`${execs?.length ?? 0}-${execs?.[0]?.id ?? 0}`} />
+
+      <details className="acc" style={{ marginTop: 12 }}>
         <summary>
           <span>완료 기록 <span className="acc-hint">유효한 완료 {activeCount}건 · 같은 할 일을 여러 번 눌러도 1건만 남아요</span></span>
         </summary>

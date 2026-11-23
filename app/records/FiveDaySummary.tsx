@@ -47,11 +47,14 @@ export default function FiveDaySummary({ refreshKey }: { refreshKey: string }) {
   const cmp = s?.comparison ?? null;
 
   return (
-    <section className="card five">
-      <div className="rec-top">
-        <h2>5일 사용 요약</h2>
-        {s && <span className="muted">{mdKo(s.start)} ~ {mdKo(s.end)} (5일)</span>}
-      </div>
+    // 시작일을 정하기 전에는 눈에 띄게 열어 두고(시작일을 정해야 하므로), 정한 뒤에는 접어서 한 줄만 보여 준다
+    <details className="acc five" open={!s}>
+      <summary>
+        <span>5일 사용 요약 <span className="acc-hint">
+          {s ? `${mdKo(s.start)}~${mdKo(s.end)} · 합계 ${s.total}분 · 하루 평균 ${s.average === null ? "-" : `${s.average}분`}` : "시작일을 정해 주세요"}
+        </span></span>
+      </summary>
+      <div className="acc-body">
       <p className="five-q"><b>질문</b> 내 큰 프로젝트가 계획한 만큼 실제로 진행되고 있는가? · <b>지표</b> 하루 실제 작업 시간 합계 (분)</p>
 
       {!s ? (
@@ -146,6 +149,7 @@ export default function FiveDaySummary({ refreshKey }: { refreshKey: string }) {
         </form>
       </details>
       {msg && <p className="inline-note" style={{ marginTop: 10 }}>{msg}</p>}
-    </section>
+      </div>
+    </details>
   );
 }
