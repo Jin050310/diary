@@ -513,3 +513,11 @@ a.stat:hover .stat-value { color: var(--accent); }
 .hero-progress { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
 .hero-progress > span { font-size: 13px; color: var(--sub); font-weight: 600; }
 .hero-progress .progress { height: 10px; }
+
+/* ───── 기록 남기기: 체크한 줄에서도 눌러야 할 버튼으로 보이게 + 오늘 할 일 바로 고르기 ───── */
+.mini-link.primary { background: var(--accent-strong); color: var(--on-accent); padding: 6px 14px; font-size: 13px; box-shadow: 0 1px 2px rgba(34, 114, 235, .35); }
+.mini-link.primary:hover { background: var(--accent-press); filter: none; }
+.today-pick { margin: 4px 0 12px; }
+.today-pick-label { display: block; font-size: 13px; font-weight: 700; color: var(--sub); margin-bottom: 6px; }
+.today-pick .chips { gap: 8px; }
+.today-pick .chip { text-align: left; white-space: normal; line-height: 1.35; padding: 8px 14px; }

@@ -119,7 +119,10 @@ export default function DayPanel({
           )}
         </div>
         <div className="t-actions" style={{ paddingLeft: 0, width: "auto" }}>
-          <Link href={`/records?task=${t.id}`} className="mini-link">기록</Link>
+          {/* 체크해서 줄이 그어져도 "기록"은 누를 수 있다는 게 한눈에 보이도록, 완료한 줄에서는 진한 채움 버튼으로 */}
+          {t.status === "done"
+            ? <Link href={`/records?task=${t.id}`} className="mini-link primary">{(t.exec_count ?? 0) > 0 ? "기록 더하기" : "기록 남기기"}</Link>
+            : <Link href={`/records?task=${t.id}`} className="mini-link">기록</Link>}
           <button type="button" className="icon-btn" aria-label="더보기" aria-expanded={menuId === t.id} onClick={() => setMenuId(menuId === t.id ? null : t.id)}>⋯</button>
         </div>
       </li>

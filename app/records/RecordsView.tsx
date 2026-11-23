@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
-import { api, dateTime, dueLabel, kstToday, mdKo, noopSubscribe, shortMin } from "@/lib/format";
+import { api, dateTime, daysBetween, dueLabel, kstToday, mdKo, noopSubscribe, shortMin } from "@/lib/format";
 import { toggleTask } from "@/lib/taskActions";
 import type { Completion, Execution, Task } from "@/lib/types";
 import { useApi } from "@/lib/useApi";
@@ -15,13 +15,38 @@ const KST = 9 * 3600000;
 const kstDay = (iso: string) => new Date(Date.parse(iso) + KST).toISOString().slice(0, 10);
 const kstHm = (iso: string) => new Date(Date.parse(iso) + KST).toISOString().slice(11, 16);
 
+// 선택 목록을 날짜별로 묶는다. (서버가 마감일 순으로 주므로 이웃한 같은 날짜만 모으면 된다)
+function groupByDate(tasks: Task[], today: string | null) {
+  const out: { key: string; label: string; items: Task[] }[] = [];
+  for (const t of tasks) {
+    const key = t.due_date ?? "none";
+    let g = out[out.length - 1];
+    if (!g || g.key !== key) { g = { key, label: "", items: [] }; out.push(g); }
+    g.items.push(t);
+  }
+  for (const g of out) {
+    const due = g.key === "none" ? null : g.key;
+    if (!due) { g.label = "마감 없음"; continue; }
+    const d = today ? daysBetween(today, due) : null;
+    g.label = d === null ? mdKo(due) : d === 0 ? `오늘 · ${mdKo(due)}` : d === 1 ? `내일 · ${mdKo(due)}` : d < 0 ? `${-d}일 지남 · ${mdKo(due)}` : mdKo(due);
+  }
+  return out;
+}
+// "일본어 번역·테스트·단어장 프로젝트" → "일본어 번역·테스트·단어장" (목록에서 한눈에 구분되게 뒤의 '프로젝트'만 뺌)
+const shortPlan = (title?: string) => (title ?? "").replace(/\s*프로젝트.*$/, "");
+
 type Mode = "quick" | "manual";
 const PRESETS = [15, 30, 60, 90, 120];
 
 export default function RecordsView() {
   const sp = useSearchParams();
   const today = useSyncExternalStore(noopSubscribe, kstToday, () => null);
-  const [taskId, setTaskId] = useState(sp.get("task") ?? "");
+  // 선택한 할 일: 주소의 ?task= 값을 항상 따라간다. (처음 한 번만 읽으면, 화면이 먼저 그려질 때 주소 값이 비어 있는 경우
+  // 눌렀던 할 일이 아니라 빈 선택이 되어 버린다.) 사용자가 직접 고르면 그 선택이 우선하고, 주소가 바뀌면 다시 주소를 따른다.
+  const urlTask = sp.get("task") ?? "";
+  const [pick, setPick] = useState<{ base: string; id: string } | null>(null);
+  const taskId = pick && pick.base === urlTask ? pick.id : urlTask;
+  const setTaskId = (id: string) => setPick({ base: urlTask, id });
   const [mode, setMode] = useState<Mode>("quick");
   const [dur, setDur] = useState(30);
   const [started, setStarted] = useState("");
@@ -39,6 +64,8 @@ export default function RecordsView() {
   const selectedTask = tasks?.find((t) => String(t.id) === taskId);
   const open = (tasks ?? []).filter((t) => t.status === "todo");
   const doneTasks = (tasks ?? []).filter((t) => t.status === "done");
+  const todayTasks = today ? (tasks ?? []).filter((t) => t.due_date === today) : [];
+  const openGroups = groupByDate(open, today);
 
   function setTimes(s: string, e: string) {
     setStarted(s);
@@ -106,22 +133,36 @@ export default function RecordsView() {
         <div className="steps">
           <div>
             <div className="step-title"><span className="step-no">1</span>어떤 일을 했나요?</div>
+            {/* 오늘 마감인 할 일은 버튼 한 번으로 고른다 (긴 목록에서 찾지 않아도 되게) */}
+            {todayTasks.length > 0 && (
+              <div className="today-pick">
+                <span className="today-pick-label">오늘 할 일</span>
+                <div className="chips" role="group" aria-label="오늘 할 일">
+                  {todayTasks.map((t) => (
+                    <button key={t.id} type="button" className={`chip${taskId === String(t.id) ? " on" : ""}`} aria-pressed={taskId === String(t.id)}
+                      onClick={() => { setTaskId(String(t.id)); setSaved(""); }}>
+                      {t.status === "done" ? "✓ " : ""}{t.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <select value={taskId} aria-label="한 일" onChange={(e) => { setTaskId(e.target.value); setSaved(""); }}>
-              <option value="">할 일을 고르세요</option>
-              {open.length > 0 && (
-                <optgroup label="진행 중인 일">
-                  {open.map((t) => <option key={t.id} value={t.id}>{t.title} — {t.plan_title}</option>)}
+              <option value="">{todayTasks.length > 0 ? "다른 날짜의 할 일 고르기" : "할 일을 고르세요"}</option>
+              {openGroups.map((g) => (
+                <optgroup key={g.key} label={g.label}>
+                  {g.items.map((t) => <option key={t.id} value={t.id}>{t.title} · {shortPlan(t.plan_title)}</option>)}
                 </optgroup>
-              )}
+              ))}
               {doneTasks.length > 0 && (
-                <optgroup label="완료한 일">
-                  {doneTasks.map((t) => <option key={t.id} value={t.id}>✓ {t.title} — {t.plan_title}</option>)}
+                <optgroup label="이미 끝낸 일">
+                  {doneTasks.map((t) => <option key={t.id} value={t.id}>✓ {t.title} · {shortPlan(t.plan_title)}</option>)}
                 </optgroup>
               )}
             </select>
             {selectedTask && dl && (
               <p className="muted sel-info">
-                마감 <b className={dl.tone === "late" ? "due-late" : dl.tone === "soon" ? "due-soon" : ""}>{dl.text}</b> · 예상 {shortMin(selectedTask.estimated_minutes)}
+                <b>{selectedTask.plan_title}</b> · 마감 <b className={dl.tone === "late" ? "due-late" : dl.tone === "soon" ? "due-soon" : ""}>{dl.text}</b> · 예상 {shortMin(selectedTask.estimated_minutes)}
                 {(selectedTask.exec_count ?? 0) > 0 ? ` · 지금까지 ${selectedTask.exec_count}번, 실제 ${shortMin(selectedTask.actual_minutes)}` : " · 아직 기록이 없어요"}
               </p>
             )}
