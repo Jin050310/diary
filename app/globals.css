@@ -147,7 +147,7 @@ tr:last-child td { border-bottom: 0; }
   display: block; font-size: 12px; font-weight: 600; line-height: 18px; padding: 0 7px; border-radius: 6px;
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #10192b; background: var(--dot, #bcdcff);
 }
-.cal-chip.done { opacity: .5; text-decoration: line-through; }
+.cal-chip.done { opacity: .6; }
 .cal-more { font-size: 11px; color: var(--muted); font-weight: 600; padding-left: 2px; }
 .cal-dots { display: flex; flex-wrap: wrap; gap: 3px; min-height: 8px; }
 .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--dot, #bcdcff); }
@@ -187,7 +187,7 @@ details[open] summary { margin-bottom: 4px; }
 .task { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 0; padding: 16px 18px; }
 .task-body { flex: 1; min-width: 0; }
 .task-title { font-weight: 700; font-size: 16px; word-break: break-word; }
-.task.done .task-title { text-decoration: line-through; color: var(--muted); }
+/* 완료 표시는 파란 ✓ 동그라미로만 한다. 글자에 취소선을 긋거나 흐리게 하면 "기록"도 못 누르는 것처럼 보인다 */
 .task-meta a { color: var(--accent); text-decoration: none; }
 .task-actions { flex-shrink: 0; }
 .task-actions button { padding: 8px 12px; font-size: 13px; }
@@ -202,7 +202,6 @@ details[open] summary { margin-bottom: 4px; }
 @media (max-width: 560px) { .task { flex-wrap: wrap; } }
 .day-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .day-tasks li { display: flex; gap: 8px; align-items: baseline; padding: 10px 14px; background: var(--surface); border-radius: var(--radius-sm); font-weight: 600; }
-.day-tasks li.done { color: var(--muted); text-decoration: line-through; }
 .day-tasks .mark { color: var(--ok); font-weight: 800; }
 h3.sub { font-size: 14px; color: var(--muted); margin: 16px 0 8px; font-weight: 700; }
 .btn-link {
@@ -382,7 +381,6 @@ button.stat.on { border-color: var(--accent); background: var(--accent-soft); }
 /* 할 일 한 줄 (할 일 화면·달력 패널 공통) */
 .trow-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .trow { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; background: var(--surface); border-radius: var(--radius-sm); }
-.trow.done .t-title { text-decoration: line-through; color: var(--muted); }
 .trow .check { margin-top: 1px; }
 .t-main { flex: 1; min-width: 0; }
 .t-title { font-weight: 700; font-size: 15.5px; word-break: break-word; line-height: 1.4; }
