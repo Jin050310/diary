@@ -71,6 +71,9 @@ try {
   check("C13~C15", s3.comparison && s3.comparison.before.days === 4 && s3.comparison.before.total === 135 && s3.comparison.before.average === 34 && s3.comparison.after.days === 0 && s3.comparison.after.average === null,
     "변경 전 4일 합계 135분·평균 34분 / 변경 후 0일 (같은 계산 규칙으로 나눔)", JSON.stringify(s3.comparison));
 
+  check("C12", s3.changes[0].before_last !== null && s3.changes[0].after_first === null && typeof s3.changes[0].order_ok === "boolean", "규칙 변경에 근거(직전 기록·직후 기록·순서 판정)가 함께 옴");
+  check("C12", s3.days.every((d) => Array.isArray(d.record_ids) && d.day_no >= 1), "날짜별로 몇 일차인지와 기록 번호가 함께 옴");
+
   // 다른 계정에는 보이지 않는다
   const o = (await api(u2, "/api/summary")).body;
   check("접근 제어", o.configured === false && o.changes.length === 0, "다른 계정의 5일 요약·규칙 변경 기록은 섞이지 않음");

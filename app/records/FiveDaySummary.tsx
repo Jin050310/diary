@@ -1,11 +1,13 @@
 "use client";
 import { useState, useSyncExternalStore } from "react";
 import { api, dateTime, kstToday, mdKo, noopSubscribe } from "@/lib/format";
-import { OUTLIER_MINUTES, WEEK_STARTS_ON, type Summary } from "@/lib/summaryCalc";
+import { OUTLIER_MINUTES, WEEK_STARTS_ON, type ChangeEvidence, type SChange, type Summary } from "@/lib/summaryCalc";
 import { useApi } from "@/lib/useApi";
 import { Stat } from "../ui";
 
-type Resp = (Partial<Summary> & { configured: boolean; changes: Summary["changes"] });
+// 시작일을 정하기 전에는 근거 계산이 없으므로 규칙 변경 기록은 근거 없이 온다
+type ChangeView = SChange & Partial<Pick<ChangeEvidence, "before_last" | "after_first" | "order_ok">>;
+type Resp = Omit<Partial<Summary>, "changes"> & { configured: boolean; changes: ChangeView[] };
 
 // 5일 사용 요약 (T07-C132 등): 화면의 합계·평균은 lib/summaryCalc.ts 가 계산한다. (scripts/test-summary-calc.mjs 가 손으로 구한 값과 대조)
 export default function FiveDaySummary({ refreshKey }: { refreshKey: string }) {
@@ -43,7 +45,7 @@ export default function FiveDaySummary({ refreshKey }: { refreshKey: string }) {
   if (error) return <section className="card"><p className="error">{error}</p></section>;
   if (!data) return <section className="card"><p className="muted">5일 요약을 불러오는 중…</p></section>;
 
-  const s = data.configured ? (data as Summary) : null;
+  const s = data.configured ? (data as unknown as Summary) : null;
   const cmp = s?.comparison ?? null;
 
   return (
@@ -79,8 +81,8 @@ export default function FiveDaySummary({ refreshKey }: { refreshKey: string }) {
               <tbody>
                 {s.days.map((d) => (
                   <tr key={d.date} className={d.date === s.today ? "five-today" : ""}>
-                    <td><b>{mdKo(d.date)}</b>{d.date === s.today && <span className="today-pill" style={{ marginLeft: 6 }}>오늘</span>}</td>
-                    <td>{d.status === "future" ? "-" : `${d.count}건${d.duplicates ? ` (중복 ${d.duplicates}건 제외)` : ""}`}</td>
+                    <td><b>{d.day_no}일차</b> <span className="muted">{mdKo(d.date)}</span>{d.date === s.today && <span className="today-pill" style={{ marginLeft: 6 }}>오늘</span>}</td>
+                    <td>{d.status === "future" ? "-" : <>{`${d.count}건${d.duplicates ? ` (중복 ${d.duplicates}건 제외)` : ""}`}{d.record_ids.length > 0 && <span className="muted"> · {d.record_ids.map((n) => `#${n}`).join(" ")}</span>}</>}</td>
                     <td className="five-min">{d.status === "future" ? "-" : d.status === "outlier" ? <span title="합계에서 제외">{d.raw_minutes}분</span> : `${d.minutes}분`}</td>
                     <td>
                       {d.status === "missing" && <span className="pill warn">기록 없음 · 0분 계산</span>}
@@ -119,6 +121,16 @@ export default function FiveDaySummary({ refreshKey }: { refreshKey: string }) {
               <div className="change-when">{dateTime(c.changed_at)} <span className="muted">(서버가 기록한 시각)</span></div>
               <div><b>{c.rule_name}</b>: {c.old_value} → <b>{c.new_value}</b></div>
               <div className="change-reason"><span className="rec-block-label">이유</span>{c.reason}</div>
+              {c.order_ok !== undefined && (
+                <div className="change-proof">
+                  <b>근거 (서버가 저장한 시각 기준)</b>
+                  <span>변경 전 마지막 기록: {c.before_last ? `#${c.before_last.id} · ${c.before_last.day_no}일차 ${mdKo(c.before_last.date)}` : "없음"}</span>
+                  <span>변경 후 첫 기록: {c.after_first ? `#${c.after_first.id} · ${c.after_first.day_no}일차 ${mdKo(c.after_first.date)}` : "아직 없음"}</span>
+                  <span className={c.order_ok ? "ok" : "bad"}>
+                    {c.order_ok ? "✓ 2일차 기록 뒤 · 3일차 기록 앞에 기록됨" : "✗ 기준(2일차 기록을 마친 뒤, 3일차 기록 전)과 다르게 기록됨 — 이유를 문서에 적어 주세요"}
+                  </span>
+                </div>
+              )}
             </li>
           ))}
         </ul>

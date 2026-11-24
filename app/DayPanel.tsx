@@ -165,11 +165,11 @@ export default function DayPanel({
         {canQuick && recId === t.id && (
           <div className="quick-rec">
             <div className="chips" role="group" aria-label="걸린 시간">
-              {[15, 30, 60, 90, 120].map((m) => (
+              {[30, 60, 90, 120].map((m) => (
                 <button key={m} type="button" className={`chip${recDur === m ? " on" : ""}`} aria-pressed={recDur === m} onClick={() => setRecDur(m)}>{shortMin(m)}</button>
               ))}
             </div>
-            <input value={recBlocker} maxLength={1000} placeholder="막힌 점이 있었다면 한 줄 (없으면 비워 두세요)" aria-label="막힌 점" onChange={(e) => setRecBlocker(e.target.value)} />
+            <input value={recBlocker} maxLength={1000} placeholder="막힌 점 한 줄 (없으면 비워 두세요)" aria-label="막힌 점" onChange={(e) => setRecBlocker(e.target.value)} />
             <div className="row">
               <button type="button" disabled={recBusy} onClick={() => saveRec(t, false)}>{recBusy ? "저장 중…" : "기록 저장"}</button>
               {t.status === "todo" && <button type="button" className="ghost" disabled={recBusy} onClick={() => saveRec(t, true)}>저장하고 완료</button>}

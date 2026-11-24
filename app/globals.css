@@ -711,3 +711,13 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(74, 92, 1
 .trow:has(> .quick-rec) { flex-wrap: wrap; }
 .trow > .quick-rec { flex: 1 1 100%; margin-top: 2px; }
 .quick-rec .row { gap: 8px; align-items: center; }
+
+/* 규칙 변경의 근거(어느 기록 사이에 놓였는지) */
+.change-proof { display: grid; gap: 2px; margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 13px; color: var(--sub); }
+.change-proof b { color: var(--text); }
+.change-proof .ok { color: var(--ok); font-weight: 700; }
+.change-proof .bad { color: var(--danger); font-weight: 700; }
+
+/* 간단 기록의 시간 버튼은 한 줄로 (30분·1시간·1시간 30분·2시간) */
+.quick-rec .chips { flex-wrap: nowrap; gap: 6px; }
+.quick-rec .chip { flex: 0 0 auto; white-space: nowrap; padding: 5px 10px; }

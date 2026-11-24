@@ -39,6 +39,18 @@ check(eq(s1.comparison.before, { days: 2, total: 190, average: 95 }), "변경 �
 check(eq(s1.comparison.after, { days: 1, total: 0, average: 0 }), "변경 후: 1일 합계 0분, 평균 0분 (기록 없는 날도 0분으로 센다)");
 check(s1.comparison.diff === -95, "차이(후 − 전) = −95분 (나빠진 결과도 그대로 보여 준다)");
 
+// ── 변경 근거 (T07-C09·C12): 변경 직전 마지막 기록 / 직후 첫 기록 / 2일차 뒤·3일차 앞 판정
+//  변경 11/24 23:00(한국) 직전에 저장된 마지막 기록 = 기록 4 (11/24 2일차), 직후 첫 기록 = 기록 5 (11/26 4일차) → 조건 충족
+const ev = s1.changes[0];
+check(ev.before_last?.id === 4 && ev.before_last.day_no === 2, "변경 직전 마지막 기록 = #4 (2일차)");
+check(ev.after_first?.id === 5 && ev.after_first.day_no === 4, "변경 직후 첫 기록 = #5 (4일차)");
+check(ev.order_ok === true, "2일차 기록 뒤 · 3일차 기록 앞이면 order_ok = true");
+check(eq(s1.days.map((d) => d.record_ids), [[1, 3], [4], [], [5, 6], []]) && eq(s1.days.map((d) => d.day_no), [1, 2, 3, 4, 5]), "날짜별 기록 번호와 몇 일차인지 (중복 #2 는 제외)");
+const early = buildSummary(execs, [{ id: 3, changed_at: "2026-11-24T00:30:00Z", rule_name: "x", old_value: "a", new_value: "b", reason: "c" }], "2026-11-23", 5, "2026-11-26");
+check(early.changes[0].before_last?.day_no === 1 && early.changes[0].order_ok === false, "2일차 기록보다 먼저 바꾸면 order_ok = false");
+const late = buildSummary([...execs, { id: 7, task_id: 9, started_at: "2026-11-24T21:00:00+09:00", actual_minutes: 10, created_at: "2026-11-24T14:30:00Z" }], chg, "2026-11-23", 5, "2026-11-26");
+check(late.changes[0].after_first?.id === 7 && late.changes[0].order_ok === false, "변경한 뒤에 2일차 기록을 더 넣으면 order_ok = false");
+
 // ── 변경한 날 처리: 그날 첫 기록이 변경 시각보다 나중에 저장되면 그날은 '변경 후'
 const chgMorning = [{ id: 2, changed_at: "2026-11-24T00:30:00Z", rule_name: "x", old_value: "a", new_value: "b", reason: "c" }]; // 11/24 09:30 한국, 첫 기록(01:00Z)보다 앞
 const s2 = buildSummary(execs, chgMorning, "2026-11-23", 5, "2026-11-26");

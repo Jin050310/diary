@@ -19,15 +19,22 @@ export const WEEK_STARTS_ON = "월요일";
 export type SExec = { id: number; task_id: number; started_at: string; actual_minutes: number; created_at: string };
 export type SChange = { id: number; changed_at: string; rule_name: string; old_value: string; new_value: string; reason: string };
 export type DayStatus = "ok" | "missing" | "outlier" | "future";
+// 규칙 변경이 "어느 기록 사이"에 놓였는지 가리키는 근거 (저장 시각 기준, 서버가 찍은 값으로만 계산)
+export type RecordRef = { id: number; day_no: number; date: string; saved_at: string };
+export type ChangeEvidence = SChange & {
+  before_last: RecordRef | null; // 변경 직전에 저장된 마지막 기록
+  after_first: RecordRef | null; // 변경 직후 처음 저장된 기록
+  order_ok: boolean;             // 2일차 기록 뒤 · 3일차 기록 앞 (T07-C09·C12)
+};
 export type DayRow = {
-  date: string; minutes: number; raw_minutes: number; count: number; duplicates: number;
+  day_no: number; record_ids: number[]; date: string; minutes: number; raw_minutes: number; count: number; duplicates: number;
   status: DayStatus; period: "before" | "after" | null;
 };
 export type PeriodStat = { days: number; total: number; average: number | null };
 export type Summary = {
   start: string; end: string; today: string; day_count: number;
   days: DayRow[]; counted_days: number; total: number; average: number | null;
-  changes: SChange[];
+  changes: ChangeEvidence[];
   comparison: null | { change_id: number; before: PeriodStat; after: PeriodStat; diff: number | null };
 };
 
@@ -70,15 +77,29 @@ export function buildSummary(execs: SExec[], changes: SChange[], start: string, 
         period = firstSaved < Date.parse(first.changed_at) ? "before" : "after";
       }
     }
-    days.push({ date, minutes: status === "ok" ? raw : 0, raw_minutes: raw, count: recs.length, duplicates: dupByDay.get(date) ?? 0, status, period });
+    days.push({ day_no: i + 1, record_ids: recs.map((e) => e.id), date, minutes: status === "ok" ? raw : 0, raw_minutes: raw, count: recs.length, duplicates: dupByDay.get(date) ?? 0, status, period });
   }
+
+  // 규칙 변경의 근거: 저장 시각이 변경 시각보다 앞선 마지막 기록 / 뒤인 첫 기록. 변경은 2일차 기록 뒤, 3일차 기록 앞이어야 한다.
+  const dayNo = (date: string) => Math.round((Date.parse(date + "T00:00:00Z") - Date.parse(start + "T00:00:00Z")) / 86400000) + 1;
+  const refs: RecordRef[] = kept
+    .map((e) => ({ id: e.id, day_no: dayNo(kstDate(e.started_at)), date: kstDate(e.started_at), saved_at: e.created_at }))
+    .sort((a, b) => Date.parse(a.saved_at) - Date.parse(b.saved_at) || a.id - b.id);
+  const evidence: ChangeEvidence[] = sortedChanges.map((ch) => {
+    const t = Date.parse(ch.changed_at);
+    const before = refs.filter((r) => Date.parse(r.saved_at) < t);
+    const after = refs.filter((r) => Date.parse(r.saved_at) >= t);
+    const before_last = before.length ? before[before.length - 1] : null;
+    const after_first = after.length ? after[0] : null;
+    return { ...ch, before_last, after_first, order_ok: !!before_last && before_last.day_no === 2 && (!after_first || after_first.day_no >= 3) };
+  });
 
   const counted = days.filter((d) => d.status === "ok" || d.status === "missing");
   const total = counted.reduce((s, d) => s + d.minutes, 0);
   return {
     start, end: addDays(start, dayCount - 1), today, day_count: dayCount,
     days, counted_days: counted.length, total, average: counted.length ? Math.round(total / counted.length) : null,
-    changes: sortedChanges,
+    changes: evidence,
     comparison: first ? (() => {
       const before = stat(counted.filter((d) => d.period === "before"));
       const after = stat(counted.filter((d) => d.period === "after"));
