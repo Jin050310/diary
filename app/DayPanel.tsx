@@ -25,6 +25,13 @@ export default function DayPanel({
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [menuId, setMenuId] = useState<number | null>(null);
+  // 간단 실행 기록 (오늘 패널에서만): 걸린 시간 + 막힌 점 한 줄. "방금 끝난 일"로 저장된다.
+  const [recId, setRecId] = useState<number | null>(null);
+  const [recDur, setRecDur] = useState(30);
+  const [recBlocker, setRecBlocker] = useState("");
+  const [recBusy, setRecBusy] = useState(false);
+  const [recMsg, setRecMsg] = useState("");
+  const canQuick = selected === today; // 다른 날짜는 시각을 직접 넣어야 하므로 실행 기록 화면으로 보낸다
 
   const active = plans.filter((p) => p.start_date <= selected && p.end_date >= selected);
   const due = tasks.filter((t) => t.due_date === selected);
@@ -42,6 +49,32 @@ export default function DayPanel({
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "처리하지 못했어요");
+    }
+  }
+
+  // 저장하는 지금 시각에 끝난 것으로, 걸린 시간만큼 전에 시작한 것으로 기록한다. (실행 기록 화면의 "방금 끝났어요"와 같은 방식)
+  async function saveRec(t: Task, complete: boolean) {
+    setError("");
+    setRecMsg("");
+    setRecBusy(true);
+    try {
+      const end = new Date();
+      await api("/api/executions", {
+        method: "POST",
+        body: JSON.stringify({
+          task_id: t.id, started_at: new Date(end.getTime() - recDur * 60000).toISOString(), ended_at: end.toISOString(),
+          actual_minutes: recDur, blocker: recBlocker.trim() || null,
+        }),
+      });
+      if (complete && t.status === "todo") await toggleTask(t);
+      setRecMsg(`"${t.title}" ${shortMin(recDur)} 기록했어요${complete && t.status === "todo" ? " · 완료 처리도 했어요" : ""}`);
+      setRecId(null);
+      setRecBlocker("");
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "기록하지 못했어요");
+    } finally {
+      setRecBusy(false);
     }
   }
 
@@ -120,11 +153,32 @@ export default function DayPanel({
         </div>
         <div className="t-actions" style={{ paddingLeft: 0, width: "auto" }}>
           {/* 체크해서 줄이 그어져도 "기록"은 누를 수 있다는 게 한눈에 보이도록, 완료한 줄에서는 진한 채움 버튼으로 */}
-          {t.status === "done"
-            ? <Link href={`/records?task=${t.id}`} className="mini-link primary">{(t.exec_count ?? 0) > 0 ? "기록 더하기" : "기록 남기기"}</Link>
-            : <Link href={`/records?task=${t.id}`} className="mini-link">기록</Link>}
+          {(() => {
+            const label = t.status === "done" ? ((t.exec_count ?? 0) > 0 ? "기록 더하기" : "기록 남기기") : "기록";
+            const cls = `mini-link${t.status === "done" ? " primary" : ""}`;
+            return canQuick
+              ? <button type="button" className={cls} aria-expanded={recId === t.id} onClick={() => { setRecMsg(""); setNotice(null); setRecId(recId === t.id ? null : t.id); }}>{label}</button>
+              : <Link href={`/records?task=${t.id}`} className={cls}>{label}</Link>;
+          })()}
           <button type="button" className="icon-btn" aria-label="더보기" aria-expanded={menuId === t.id} onClick={() => setMenuId(menuId === t.id ? null : t.id)}>⋯</button>
         </div>
+        {canQuick && recId === t.id && (
+          <div className="quick-rec">
+            <div className="chips" role="group" aria-label="걸린 시간">
+              {[15, 30, 60, 90, 120].map((m) => (
+                <button key={m} type="button" className={`chip${recDur === m ? " on" : ""}`} aria-pressed={recDur === m} onClick={() => setRecDur(m)}>{shortMin(m)}</button>
+              ))}
+            </div>
+            <input value={recBlocker} maxLength={1000} placeholder="막힌 점이 있었다면 한 줄 (없으면 비워 두세요)" aria-label="막힌 점" onChange={(e) => setRecBlocker(e.target.value)} />
+            <div className="row">
+              <button type="button" disabled={recBusy} onClick={() => saveRec(t, false)}>{recBusy ? "저장 중…" : "기록 저장"}</button>
+              {t.status === "todo" && <button type="button" className="ghost" disabled={recBusy} onClick={() => saveRec(t, true)}>저장하고 완료</button>}
+              <button type="button" className="ghost" disabled={recBusy} onClick={() => setRecId(null)}>닫기</button>
+              <Link href={`/records?task=${t.id}`} className="quick-more">시각 직접 입력 →</Link>
+            </div>
+            <p className="muted">지금 끝난 것으로, {shortMin(recDur)} 전에 시작한 것으로 기록해요.</p>
+          </div>
+        )}
       </li>
     );
   };
@@ -145,9 +199,13 @@ export default function DayPanel({
 
       {notice && (
         <p className="inline-note">
-          &quot;{notice.title}&quot; 완료! 한 일을 기록으로 남길까요? <Link href={`/records?task=${notice.id}`}>실행 기록 남기기 →</Link>
+          &quot;{notice.title}&quot; 완료! 한 일을 기록으로 남길까요?{" "}
+          {canQuick
+            ? <button type="button" className="linklike" onClick={() => { setRecId(notice.id); setNotice(null); }}>여기서 바로 기록하기 →</button>
+            : <Link href={`/records?task=${notice.id}`}>실행 기록 남기기 →</Link>}
         </p>
       )}
+      {recMsg && <p className="inline-note">{recMsg} <Link href="/records">실행 기록에서 보기 →</Link></p>}
       {error && <p className="error">{error}</p>}
 
       {overdue.length > 0 && (

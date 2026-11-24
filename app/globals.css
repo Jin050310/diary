@@ -633,7 +633,7 @@ button.ghost:hover { background: var(--ink); color: #fff; filter: none; }
 
 /* ── 달력: 큰 월 이름 + 연도 띠 + 검은 격자 + 파스텔 알약 스티커 ── */
 .year-strip { overflow: hidden; white-space: nowrap; font-size: 12px; font-weight: 600; letter-spacing: .14em; color: var(--ink); border-top: 1px dashed var(--ink); border-bottom: 1px dashed var(--ink); padding: 3px 0; margin: 0 0 4px; }
-.month-giant { font-family: var(--font-display), var(--font-sans); font-weight: 400; text-transform: uppercase; font-size: min(22vw, 300px); line-height: .95; color: var(--ink); white-space: nowrap; overflow: hidden; margin: 0 0 10px; }
+.month-giant { font-family: var(--font-display), var(--font-sans); font-weight: 400; text-transform: uppercase; font-size: clamp(56px, 10vw, 128px); line-height: .95; color: var(--ink); white-space: nowrap; overflow: hidden; margin: 0 0 10px; }
 .cal-hint { margin: 0 0 16px; }
 .cal-card { background: transparent; border: 0; padding: 0; }
 .cal-title { margin-bottom: 14px; }
@@ -674,7 +674,7 @@ button.ghost:hover { background: var(--ink); color: #fff; filter: none; }
 /* 폰 화면: 메뉴가 세 줄로 쌓여 높이를 많이 차지하므로 화면에 고정하지 않고 스크롤과 함께 올라가게 한다 */
 @media (max-width: 640px) {
   .topbar { position: static; }
-  .month-giant { font-size: min(24vw, 300px); }
+  .month-giant { font-size: clamp(48px, 15vw, 84px); }
 }
 
 /* ───── 차분한 색 보정 ───── */
@@ -694,3 +694,20 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(74, 92, 1
 .overdue-acc > summary { color: var(--danger); }
 .acc-hint.late { color: var(--danger); font-weight: 700; }
 .acc .date-group:first-child h3.date-head { margin-top: 0; }
+
+/* ───── 달력 패널의 간단 실행 기록 ───── */
+.quick-rec { margin-top: 10px; padding: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 10px; }
+.quick-rec .chips { gap: 6px; }
+.quick-rec .chip { padding: 5px 11px; font-size: 13px; }
+.quick-rec input { width: 100%; }
+.quick-rec .row button { padding: 8px 14px; font-size: 14px; }
+.quick-rec p { margin: 0; }
+.quick-more { font-size: 13px; font-weight: 600; color: var(--accent); margin-left: auto; }
+.linklike { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 700; text-decoration: underline; cursor: pointer; }
+.linklike:hover { background: none; color: var(--accent-press); }
+.mini-link { cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+
+/* 간단 기록 폼은 줄 전체 폭으로 펼친다 */
+.trow:has(> .quick-rec) { flex-wrap: wrap; }
+.trow > .quick-rec { flex: 1 1 100%; margin-top: 2px; }
+.quick-rec .row { gap: 8px; align-items: center; }
